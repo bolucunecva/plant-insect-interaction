@@ -35,11 +35,9 @@ Columns:
 
 
 ## Repository Goals
-
 - Build a reproducible dataset of plant-insect interaction records.
 - Enrich raw extraction outputs with taxonomic and geographic metadata.
-- Produce cleaned datasets for downstream analysis and integration (for example, GloBI-style indexing workflows).
-- 
+  
 This repository provides a sample dataset that contains plant-insect interactions.
 
  
