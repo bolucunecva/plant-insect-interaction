@@ -1,4 +1,109 @@
 { 
   "_comment": "Pmant-insect interaction dataset",
-  "citation": "JXXX."
+  "citation": "JXXX.",
+  "@context" : [ "http://www.w3.org/ns/csvw", {
+    "@language" : "en"
+  } ],
+  "rdfs:comment" : [ "inspired by https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/" ],
+  "tables" : [ {
+    "@context" : [ "http://www.w3.org/ns/csvw", {
+      "@language" : "en"
+    } ],
+    "rdfs:comment" : [ "inspired by https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/" ],
+    "url" : "data/plant_sample_data.csv",
+    "delimiter" : ",",
+    "headerRowCount" : 1,
+    "null" : [ "" ],
+    "tableSchema" : {
+      "columns" : [ {
+        "name" : "referenceUrl",
+        "titles" : "ID",
+        "datatype": { 
+          "base" : "string",
+          "valueUrl" : "DOI"
+        }
+      }, {
+        "name" : "insect_family",
+        "titles" : "insect_family",
+        "datatype" : "string"
+      },{
+        "name" : "insect_taxon",
+        "titles" : "insect_taxon",
+        "datatype" : "string"
+      }, {
+        "name" : "plant_family",
+        "titles" : "plant_family",
+        "datatype" : "string"
+      }, {
+        "name" : "plant_taxon",
+        "titles" : "plant_taxon",
+        "datatype" : "string"
+      }, {
+        "name" : "plant_organ",
+        "titles" : "plant_organ",
+        "datatype" : "string"
+      }, {
+        "name" : "geographic_location",
+        "titles" : "geographic_location",
+        "datatype" : "string"
+      }, {
+        "name" : "sourceTaxonName",
+        "titles" : "from_name",
+        "datatype" : "string"
+      }, {
+        "name" : "latitude",
+        "titles" : "latitude",
+        "datatype" : "float"
+      }, {
+        "name" : "longitude",
+        "titles" : "longitude",
+         "datatype" : "float"
+      }, {
+        "name" : "insect_lifestage_when_on_host",
+        "titles" : "insect_lifestage_when_on_host",
+        "datatype" : "string"
+      }, {
+        "name" : "insect_taxon_canonical_name",
+        "titles" : "insect_taxon_canonical_name",
+         "datatype": { 
+          "base" : "string",
+          "valueUrl" : "iNaturalist:taxa{targetTaxonId}"
+        }
+      }, {
+        "name" : "insect_taxon_rank",
+        "titles" : "insect_taxon_rank",
+        "datatype": { 
+          "base" : "string",
+          "valueUrl" : "iNaturalist:taxa{targetTaxonId}"
+        }
+      },
+      {
+        "name" : "insect_taxon_hierarchy",
+        "titles" : "insect_taxon_hierarchy",
+        "datatype": { 
+          "base" : "string",
+          "valueUrl" : "iNaturalist:taxa{targetTaxonId}"
+        }
+      },
+       {
+        "name" : "plant_taxon_name_matched",
+        "titles" : "plant_taxon_name_matched",
+        "datatype": { 
+          "base" : "string",
+          "valueUrl" : "tnrs:v4/matchnames{targetTaxonId}"
+        }
+      }, 
+      {
+        "name" : "plant_taxon_accepted_family",
+        "titles" : "plant_taxon_accepted_family",
+        "datatype": { 
+          "base" : "string",
+          "valueUrl" : "tnrs:v4/matchnames{targetTaxonId}"
+        }
+      }
+      
+      ]
+    }
+	]
+	}
 }
