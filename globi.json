@@ -1,6 +1,6 @@
 { 
   "_comment": "Pmant-insect interaction dataset",
-  "citation": "JXXX.",
+  "citation": "XXX.",
   "@context" : [ "http://www.w3.org/ns/csvw", {
     "@language" : "en"
   } ],
