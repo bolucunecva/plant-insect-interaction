@@ -22,6 +22,8 @@
         "inspired by https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/"
       ],
       "url": "data/plant_sample_dataset.csv",
+      "interactionTypeName": "hasHost",
+      "interactionTypeId": "http://purl.obolibrary.org/obo/RO_0002454",
       "delimiter": ",",
       "headerRowCount": 1,
       "null": [
