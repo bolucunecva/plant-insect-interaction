@@ -8,8 +8,8 @@
       "@language" : "en"
     } ],
     "rdfs:comment" : [ "inspired by https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/" ],
-    "url" : "file:///home/jorrit/proj/globi/data-new/plant-insect-interaction/data/plant_sample_dataset.csv",
-    "dcterms:bibliographicCitation" : "XXX.",
+    "url" : "data/plant_sample_dataset.csv",
+    "dcterms:bibliographicCitation" : "Bolucu, Necva. 2026. Sample Insect Plant Interaction Dataset. Personal Communication.",
     "delimiter" : ",",
     "headerRowCount" : 1,
     "null" : [ "" ],
