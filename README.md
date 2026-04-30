@@ -40,6 +40,11 @@ Columns:
   
 This repository provides a sample dataset that contains plant-insect interactions.
 
+## Indexing 
+
+This repository has been configured to be indexed by Global Biotic Interactions (GloBI, https://globalbioticinteractions.org)
+
++[![GloBI Review by Elton](../../actions/workflows/review.yml/badge.svg)](../../actions/workflows/review.yml) [![GloBI](https://api.globalbioticinteractions.org/interaction.svg?accordingTo=globi:bolucunecva/plant-insect-interaction&refutes=true&refutes=false)](https://globalbioticinteractions.org/?accordingTo=globi:bolucunecva/plant-insect-interaction)
  
 
 
