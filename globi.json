@@ -21,7 +21,7 @@
       "rdfs:comment": [
         "inspired by https://www.w3.org/TR/2015/REC-tabular-data-model-20151217/"
       ],
-      "url": "data/plant_sample_data.csv",
+      "url": "data/plant_sample_dataset.csv",
       "delimiter": ",",
       "headerRowCount": 1,
       "null": [
