@@ -37,6 +37,10 @@ GITHUB_REPO = os.getenv("GITHUB_REPO")  # "owner/repo"
 GITHUB_FILE_PATH = os.getenv("GITHUB_FILE_PATH")
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
 
+# Reviewer from URL
+query_params = st.query_params
+reviewer = query_params.get("reviewer", "A")
+
 RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_FILE_PATH}"
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
 
