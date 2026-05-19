@@ -41,7 +41,7 @@ HEADERS = {
 VALID_REVIEWERS = ["A", "B", "C", "D"]
 
 # ----------------------------
-# REVIEWER INPUT (URL + SAFE FALLBACK)
+# REVIEWER SELECTION
 # ----------------------------
 query_params = st.query_params
 
@@ -53,35 +53,33 @@ if isinstance(reviewer, list):
 reviewer = str(reviewer).strip().upper()
 
 if reviewer not in VALID_REVIEWERS:
-    st.warning(f"Invalid reviewer '{reviewer}' → defaulting to A")
     reviewer = "A"
 
-# Optional UI selector (recommended UX)
+# Sidebar selector (interactive)
 reviewer = st.sidebar.selectbox(
     "Select Reviewer",
     VALID_REVIEWERS,
     index=VALID_REVIEWERS.index(reviewer)
 )
 
-# ----------------------------
-# FILE PATH
-# ----------------------------
-GITHUB_FILE_PATH = f"data/reviewer_{reviewer}.csv"
-
-API_URL = (
-    f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
-    f"?ref={GITHUB_BRANCH}"
-)
+st.sidebar.info(f"Current reviewer: {reviewer}")
 
 # ----------------------------
-# LOAD DATA
+# LOAD DATA (CACHE KEYED BY REVIEWER)
 # ----------------------------
 @st.cache_data
-def load_data():
-    r = requests.get(API_URL, headers=HEADERS)
+def load_data(reviewer):
+    github_file_path = f"data/reviewer_{reviewer}.csv"
+
+    api_url = (
+        f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
+        f"?ref={GITHUB_BRANCH}"
+    )
+
+    r = requests.get(api_url, headers=HEADERS)
 
     if r.status_code == 404:
-        st.error(f"File not found on GitHub: {GITHUB_FILE_PATH}")
+        st.error(f"File not found: {github_file_path}")
         st.stop()
 
     if r.status_code != 200:
@@ -91,7 +89,7 @@ def load_data():
     data = r.json()
 
     if "content" not in data:
-        st.error("Invalid GitHub response (no file content)")
+        st.error("Invalid GitHub response (no content)")
         st.stop()
 
     decoded = base64.b64decode(data["content"]).decode("utf-8")
@@ -101,49 +99,61 @@ def load_data():
     return df
 
 # ----------------------------
-# GET FILE SHA
+# GET SHA
 # ----------------------------
-def get_file_sha():
-    r = requests.get(API_URL, headers=HEADERS)
+def get_file_sha(reviewer):
+    github_file_path = f"data/reviewer_{reviewer}.csv"
 
-    if r.status_code != 200:
-        st.error(f"Cannot fetch file SHA: {r.status_code} - {r.text}")
-        return None
+    api_url = (
+        f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
+        f"?ref={GITHUB_BRANCH}"
+    )
 
-    return r.json().get("sha")
+    r = requests.get(api_url, headers=HEADERS)
+
+    if r.status_code == 200:
+        return r.json().get("sha")
+
+    return None
 
 # ----------------------------
 # SAVE TO GITHUB
 # ----------------------------
-def save_to_github(df, sha):
+def save_to_github(df, reviewer, sha):
+    github_file_path = f"data/reviewer_{reviewer}.csv"
+
+    api_url = (
+        f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
+    )
+
     csv_buffer = StringIO()
     df.to_csv(csv_buffer, index=False)
 
     encoded = base64.b64encode(csv_buffer.getvalue().encode()).decode()
 
     payload = {
-        "message": f"Update reviewed dataset (reviewer {reviewer})",
+        "message": f"Update dataset (reviewer {reviewer})",
         "content": encoded,
         "branch": GITHUB_BRANCH,
         "sha": sha
     }
 
-    r = requests.put(API_URL, json=payload, headers=HEADERS)
+    r = requests.put(api_url, json=payload, headers=HEADERS)
     return r.status_code, r.text
 
 # ----------------------------
-# UI
+# TITLE
 # ----------------------------
-st.title("CSV Review Tool (Table Mode)")
+st.title("CSV Review Tool (Multi-Reviewer)")
 st.caption(f"Reviewer: {reviewer}")
 
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
 # ----------------------------
-# LOAD DATA
+# LOAD DATA (IMPORTANT FIX)
 # ----------------------------
-df = load_data()
+df = load_data(reviewer)
 
 if df.empty:
     st.error("Dataset is empty")
@@ -161,7 +171,7 @@ df["review_comment"] = df["review_comment"].fillna("")
 df["corrected_value"] = df["corrected_value"].fillna("")
 
 # ----------------------------
-# EDITOR
+# TABLE EDITOR
 # ----------------------------
 st.subheader("Edit Dataset")
 
@@ -189,28 +199,28 @@ st.divider()
 if st.button("Save to GitHub"):
     with st.spinner("Saving..."):
 
-        sha = get_file_sha()
+        sha = get_file_sha(reviewer)
 
         if not sha:
-            st.error("Could not fetch SHA (file may not exist)")
+            st.error("Could not fetch file SHA")
         else:
-            status, resp = save_to_github(edited_df, sha)
+            status, resp = save_to_github(edited_df, reviewer, sha)
 
             if status in [200, 201]:
-                st.success("Saved to GitHub successfully!")
+                st.success("Saved successfully!")
                 st.cache_data.clear()
 
             elif status == 409:
-                st.error("Conflict error: file was updated elsewhere. Reload and try again.")
+                st.error("Conflict: file updated elsewhere. Reload and retry.")
 
             elif status == 401:
-                st.error("Unauthorized: check GitHub token permissions.")
+                st.error("Unauthorized: check GitHub token.")
 
             elif status == 422:
                 st.error("Invalid request (likely SHA mismatch).")
 
             else:
-                st.error(f"GitHub save failed ({status}): {resp}")
+                st.error(f"Save failed ({status}): {resp}")
 
 # ----------------------------
 # SUMMARY
