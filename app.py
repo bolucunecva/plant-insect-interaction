@@ -93,8 +93,28 @@ def load_data(reviewer):
         st.stop()
 
     decoded = base64.b64decode(data["content"]).decode("utf-8")
-
-    df = pd.read_csv(StringIO(decoded), dtype=str).fillna("")
+    
+    # DEBUG (optional)
+    # st.text(decoded[:500])
+    
+    if not decoded.strip():
+        st.error(f"{github_file_path} is empty")
+        st.stop()
+    
+    try:
+        df = pd.read_csv(StringIO(decoded), dtype=str).fillna("")
+    
+    except pd.errors.EmptyDataError:
+        st.error(f"{github_file_path} contains no CSV data")
+        st.stop()
+    
+    except pd.errors.ParserError as e:
+        st.error(f"CSV parsing error in {github_file_path}: {e}")
+        st.stop()
+    
+    except Exception as e:
+        st.error(f"Unexpected CSV error: {e}")
+        st.stop()
 
     return df
 
