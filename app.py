@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 import requests
 import os
-import base64
-from io import StringIO
 
 # ----------------------------
 # PAGE CONFIG
@@ -30,13 +28,8 @@ st.markdown(
 # ----------------------------
 # CONFIG
 # ----------------------------
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = "bolucunecva/plant-insect-interaction"
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
-
-HEADERS = {
-    "Authorization": f"token {GITHUB_TOKEN}"
-} if GITHUB_TOKEN else {}
 
 VALID_REVIEWERS = ["A", "B", "C", "D"]
 
@@ -61,80 +54,59 @@ reviewer = st.sidebar.selectbox(
     index=VALID_REVIEWERS.index(reviewer)
 )
 
-st.sidebar.info(f"Current reviewer: {reviewer}")
+st.sidebar.info(f"Reviewer: {reviewer}")
 
 # ----------------------------
-# LOAD DATA
+# FAST RAW URL (IMPORTANT FIX)
+# ----------------------------
+def get_csv_url(reviewer):
+    return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/data/reviewer_{reviewer}.csv"
+
+# ----------------------------
+# LOAD DATA (FAST + STREAMING FRIENDLY)
 # ----------------------------
 @st.cache_data
 def load_data(reviewer):
-    github_file_path = f"data/reviewer_{reviewer}.csv"
-
-    api_url = (
-        f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
-        f"?ref={GITHUB_BRANCH}"
-    )
-
-    r = requests.get(api_url, headers=HEADERS)
-
-    if r.status_code == 404:
-        st.error(f"File not found: {github_file_path}")
-        st.stop()
-
-    if r.status_code != 200:
-        st.error(f"GitHub API error {r.status_code}: {r.text}")
-        st.stop()
-
-    data = r.json()
-
-    if "content" not in data:
-        st.error("Invalid GitHub response (no content)")
-        st.stop()
-
-    decoded = base64.b64decode(data["content"]).decode("utf-8")
-
-    if not decoded.strip():
-        st.error(f"{github_file_path} is empty")
-        st.stop()
+    url = get_csv_url(reviewer)
 
     try:
-        df = pd.read_csv(StringIO(decoded), dtype=str).fillna("")
+        df = pd.read_csv(url, dtype=str, low_memory=False).fillna("")
+        return df
+
+    except pd.errors.EmptyDataError:
+        st.warning("CSV is empty. Starting with empty table.")
+        return pd.DataFrame()
+
     except Exception as e:
-        st.error(f"CSV parsing error: {e}")
+        st.error(f"Failed to load CSV: {e}")
         st.stop()
 
-    return df
+# ----------------------------
+# SAVE BACK TO GITHUB (API ONLY FOR WRITE)
+# ----------------------------
+def save_to_github(df, reviewer, token):
+    import base64
+    from io import StringIO
 
-# ----------------------------
-# GET SHA
-# ----------------------------
-def get_file_sha(reviewer):
     github_file_path = f"data/reviewer_{reviewer}.csv"
-
-    api_url = (
-        f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
-        f"?ref={GITHUB_BRANCH}"
-    )
-
-    r = requests.get(api_url, headers=HEADERS)
-
-    if r.status_code == 200:
-        return r.json().get("sha")
-
-    return None
-
-# ----------------------------
-# SAVE TO GITHUB
-# ----------------------------
-def save_to_github(df, reviewer, sha):
-    github_file_path = f"data/reviewer_{reviewer}.csv"
-
     api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
 
-    csv_buffer = StringIO()
-    df.to_csv(csv_buffer, index=False)
+    headers = {
+        "Authorization": f"token {token}"
+    }
 
-    encoded = base64.b64encode(csv_buffer.getvalue().encode()).decode()
+    # Get SHA
+    r = requests.get(api_url, headers=headers)
+    if r.status_code != 200:
+        return r.status_code, r.text
+
+    sha = r.json().get("sha")
+
+    # Convert dataframe to CSV
+    buffer = StringIO()
+    df.to_csv(buffer, index=False)
+
+    encoded = base64.b64encode(buffer.getvalue().encode()).decode()
 
     payload = {
         "message": f"Update dataset (reviewer {reviewer})",
@@ -143,17 +115,14 @@ def save_to_github(df, reviewer, sha):
         "sha": sha
     }
 
-    r = requests.put(api_url, json=payload, headers=HEADERS)
+    r = requests.put(api_url, json=payload, headers=headers)
     return r.status_code, r.text
 
 # ----------------------------
 # TITLE
 # ----------------------------
-st.title("CSV Review Tool (Multi-Reviewer)")
+st.title("Review Tool")
 st.caption(f"Reviewer: {reviewer}")
-
-if not GITHUB_TOKEN:
-    st.warning("Missing GITHUB_TOKEN — saving disabled")
 
 # ----------------------------
 # LOAD DATA
@@ -161,11 +130,11 @@ if not GITHUB_TOKEN:
 df = load_data(reviewer)
 
 if df.empty:
-    st.error("Dataset is empty")
-    st.stop()
+    st.info("No data found — showing empty table.")
+    df = pd.DataFrame()
 
 # ----------------------------
-# EDITOR (NO FIXED COLUMNS)
+# EDITOR (NO SCHEMA LIMITS)
 # ----------------------------
 st.subheader("Edit Dataset")
 
@@ -181,15 +150,17 @@ st.divider()
 # ----------------------------
 # SAVE
 # ----------------------------
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+if not GITHUB_TOKEN:
+    st.warning("Missing GITHUB_TOKEN — saving disabled")
+
 if st.button("Save to GitHub"):
-    with st.spinner("Saving..."):
-
-        sha = get_file_sha(reviewer)
-
-        if not sha:
-            st.error("Could not fetch file SHA")
-        else:
-            status, resp = save_to_github(edited_df, reviewer, sha)
+    if not GITHUB_TOKEN:
+        st.error("No GitHub token")
+    else:
+        with st.spinner("Saving..."):
+            status, resp = save_to_github(edited_df, reviewer, GITHUB_TOKEN)
 
             if status in [200, 201]:
                 st.success("Saved successfully!")
@@ -197,12 +168,6 @@ if st.button("Save to GitHub"):
 
             elif status == 409:
                 st.error("Conflict: file updated elsewhere. Reload and retry.")
-
-            elif status == 401:
-                st.error("Unauthorized: check GitHub token.")
-
-            elif status == 422:
-                st.error("Invalid request (likely SHA mismatch).")
 
             else:
                 st.error(f"Save failed ({status}): {resp}")
