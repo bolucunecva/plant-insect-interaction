@@ -55,7 +55,6 @@ reviewer = str(reviewer).strip().upper()
 if reviewer not in VALID_REVIEWERS:
     reviewer = "A"
 
-# Sidebar selector (interactive)
 reviewer = st.sidebar.selectbox(
     "Select Reviewer",
     VALID_REVIEWERS,
@@ -65,7 +64,7 @@ reviewer = st.sidebar.selectbox(
 st.sidebar.info(f"Current reviewer: {reviewer}")
 
 # ----------------------------
-# LOAD DATA (CACHE KEYED BY REVIEWER)
+# LOAD DATA
 # ----------------------------
 @st.cache_data
 def load_data(reviewer):
@@ -93,27 +92,15 @@ def load_data(reviewer):
         st.stop()
 
     decoded = base64.b64decode(data["content"]).decode("utf-8")
-    
-    # DEBUG (optional)
-    # st.text(decoded[:500])
-    
+
     if not decoded.strip():
         st.error(f"{github_file_path} is empty")
         st.stop()
-    
+
     try:
         df = pd.read_csv(StringIO(decoded), dtype=str).fillna("")
-    
-    except pd.errors.EmptyDataError:
-        st.error(f"{github_file_path} contains no CSV data")
-        st.stop()
-    
-    except pd.errors.ParserError as e:
-        st.error(f"CSV parsing error in {github_file_path}: {e}")
-        st.stop()
-    
     except Exception as e:
-        st.error(f"Unexpected CSV error: {e}")
+        st.error(f"CSV parsing error: {e}")
         st.stop()
 
     return df
@@ -142,9 +129,7 @@ def get_file_sha(reviewer):
 def save_to_github(df, reviewer, sha):
     github_file_path = f"data/reviewer_{reviewer}.csv"
 
-    api_url = (
-        f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
-    )
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
 
     csv_buffer = StringIO()
     df.to_csv(csv_buffer, index=False)
@@ -171,7 +156,7 @@ if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
 # ----------------------------
-# LOAD DATA (IMPORTANT FIX)
+# LOAD DATA
 # ----------------------------
 df = load_data(reviewer)
 
@@ -179,9 +164,8 @@ if df.empty:
     st.error("Dataset is empty")
     st.stop()
 
-
 # ----------------------------
-# TABLE EDITOR
+# EDITOR (NO FIXED COLUMNS)
 # ----------------------------
 st.subheader("Edit Dataset")
 
@@ -189,16 +173,7 @@ edited_df = st.data_editor(
     df,
     use_container_width=True,
     hide_index=True,
-    num_rows="dynamic",
-    column_config={
-        "status": st.column_config.SelectboxColumn(
-            "Status",
-            options=["unreviewed", "approved", "flagged"],
-            width="small"
-        ),
-        "review_comment": st.column_config.TextColumn("Review Comment"),
-        "corrected_value": st.column_config.TextColumn("Corrected Value")
-    }
+    num_rows="dynamic"
 )
 
 st.divider()
@@ -236,9 +211,4 @@ if st.button("Save to GitHub"):
 # SUMMARY
 # ----------------------------
 st.subheader("Summary")
-
-col1, col2, col3 = st.columns(3)
-
-col1.metric("Total Rows", len(edited_df))
-col2.metric("Approved", (edited_df["status"] == "approved").sum())
-col3.metric("Flagged", (edited_df["status"] == "flagged").sum())
+st.metric("Total Rows", len(edited_df))
