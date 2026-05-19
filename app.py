@@ -179,16 +179,6 @@ if df.empty:
     st.error("Dataset is empty")
     st.stop()
 
-# ----------------------------
-# DATA CLEANING
-# ----------------------------
-for col in ["status", "review_comment", "corrected_value"]:
-    if col not in df.columns:
-        df[col] = ""
-
-df["status"] = df["status"].fillna("unreviewed")
-df["review_comment"] = df["review_comment"].fillna("")
-df["corrected_value"] = df["corrected_value"].fillna("")
 
 # ----------------------------
 # TABLE EDITOR
