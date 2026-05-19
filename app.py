@@ -34,24 +34,44 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 GITHUB_REPO = "bolucunecva/plant-insect-interaction"
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
 
+HEADERS = {
+    "Authorization": f"token {GITHUB_TOKEN}"
+} if GITHUB_TOKEN else {}
+
+VALID_REVIEWERS = ["A", "B", "C", "D"]
+
+# ----------------------------
+# REVIEWER INPUT (URL + SAFE FALLBACK)
+# ----------------------------
 query_params = st.query_params
 
 reviewer = query_params.get("reviewer", "A")
+
 if isinstance(reviewer, list):
     reviewer = reviewer[0]
 
-reviewer = str(reviewer).strip().upper()  # FIX: avoid case mismatch
+reviewer = str(reviewer).strip().upper()
 
+if reviewer not in VALID_REVIEWERS:
+    st.warning(f"Invalid reviewer '{reviewer}' → defaulting to A")
+    reviewer = "A"
+
+# Optional UI selector (recommended UX)
+reviewer = st.sidebar.selectbox(
+    "Select Reviewer",
+    VALID_REVIEWERS,
+    index=VALID_REVIEWERS.index(reviewer)
+)
+
+# ----------------------------
+# FILE PATH
+# ----------------------------
 GITHUB_FILE_PATH = f"data/reviewer_{reviewer}.csv"
 
 API_URL = (
     f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
-    f"?ref={GITHUB_BRANCH}"   # 🔥 FIX: branch must be included
+    f"?ref={GITHUB_BRANCH}"
 )
-
-HEADERS = {
-    "Authorization": f"token {GITHUB_TOKEN}"
-} if GITHUB_TOKEN else {}
 
 # ----------------------------
 # LOAD DATA
@@ -61,7 +81,7 @@ def load_data():
     r = requests.get(API_URL, headers=HEADERS)
 
     if r.status_code == 404:
-        st.error(f"File not found in GitHub: {GITHUB_FILE_PATH}")
+        st.error(f"File not found on GitHub: {GITHUB_FILE_PATH}")
         st.stop()
 
     if r.status_code != 200:
@@ -71,7 +91,7 @@ def load_data():
     data = r.json()
 
     if "content" not in data:
-        st.error("Invalid GitHub response: no file content found")
+        st.error("Invalid GitHub response (no file content)")
         st.stop()
 
     decoded = base64.b64decode(data["content"]).decode("utf-8")
@@ -81,13 +101,16 @@ def load_data():
     return df
 
 # ----------------------------
-# GET SHA
+# GET FILE SHA
 # ----------------------------
 def get_file_sha():
     r = requests.get(API_URL, headers=HEADERS)
-    if r.status_code == 200:
-        return r.json().get("sha")
-    return None
+
+    if r.status_code != 200:
+        st.error(f"Cannot fetch file SHA: {r.status_code} - {r.text}")
+        return None
+
+    return r.json().get("sha")
 
 # ----------------------------
 # SAVE TO GITHUB
@@ -117,7 +140,9 @@ st.caption(f"Reviewer: {reviewer}")
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
+# ----------------------------
 # LOAD DATA
+# ----------------------------
 df = load_data()
 
 if df.empty:
@@ -162,18 +187,30 @@ st.divider()
 # SAVE
 # ----------------------------
 if st.button("Save to GitHub"):
-    sha = get_file_sha()
+    with st.spinner("Saving..."):
 
-    if not sha:
-        st.error("Could not fetch file SHA (file may not exist)")
-    else:
-        status, resp = save_to_github(edited_df, sha)
+        sha = get_file_sha()
 
-        if status in [200, 201]:
-            st.success("Saved to GitHub successfully!")
-            st.cache_data.clear()
+        if not sha:
+            st.error("Could not fetch SHA (file may not exist)")
         else:
-            st.error(f"GitHub save failed: {resp}")
+            status, resp = save_to_github(edited_df, sha)
+
+            if status in [200, 201]:
+                st.success("Saved to GitHub successfully!")
+                st.cache_data.clear()
+
+            elif status == 409:
+                st.error("Conflict error: file was updated elsewhere. Reload and try again.")
+
+            elif status == 401:
+                st.error("Unauthorized: check GitHub token permissions.")
+
+            elif status == 422:
+                st.error("Invalid request (likely SHA mismatch).")
+
+            else:
+                st.error(f"GitHub save failed ({status}): {resp}")
 
 # ----------------------------
 # SUMMARY
