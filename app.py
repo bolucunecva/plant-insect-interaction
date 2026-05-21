@@ -20,6 +20,11 @@ st.markdown(
     div[data-testid="stDataEditor"] {
         width: 100% !important;
     }
+
+    /* Highlight edited cells */
+    .edited-cell {
+        background-color: #fff3cd !important;
+    }
     </style>
     """,
     unsafe_allow_html=True
@@ -57,13 +62,13 @@ reviewer = st.sidebar.selectbox(
 st.sidebar.info(f"Reviewer: {reviewer}")
 
 # ----------------------------
-# FAST RAW URL (IMPORTANT FIX)
+# FAST RAW URL
 # ----------------------------
 def get_csv_url(reviewer):
     return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/data/reviewer_{reviewer}.csv"
 
 # ----------------------------
-# LOAD DATA (FAST + STREAMING FRIENDLY)
+# LOAD DATA
 # ----------------------------
 @st.cache_data
 def load_data(reviewer):
@@ -82,7 +87,7 @@ def load_data(reviewer):
         st.stop()
 
 # ----------------------------
-# SAVE BACK TO GITHUB (API ONLY FOR WRITE)
+# SAVE TO GITHUB
 # ----------------------------
 def save_to_github(df, reviewer, token):
     import base64
@@ -133,16 +138,110 @@ if df.empty:
     st.info("No data found — showing empty table.")
     df = pd.DataFrame()
 
+# Keep original copy for comparison
+original_df = df.copy()
+
 # ----------------------------
-# EDITOR (NO SCHEMA LIMITS)
+# FILTERS
+# ----------------------------
+st.sidebar.header("Filters")
+
+filtered_df = df.copy()
+
+# Global search
+search_text = st.sidebar.text_input("Search")
+
+if search_text:
+    filtered_df = filtered_df[
+        filtered_df.astype(str)
+        .apply(
+            lambda row: row.str.contains(
+                search_text,
+                case=False,
+                na=False
+            ).any(),
+            axis=1
+        )
+    ]
+
+# Column filters
+filter_columns = st.sidebar.multiselect(
+    "Filter Columns",
+    options=filtered_df.columns.tolist()
+)
+
+for col in filter_columns:
+
+    unique_values = sorted(
+        filtered_df[col]
+        .astype(str)
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_values = st.sidebar.multiselect(
+        f"{col}",
+        options=unique_values,
+        default=unique_values
+    )
+
+    filtered_df = filtered_df[
+        filtered_df[col].astype(str).isin(selected_values)
+    ]
+
+# ----------------------------
+# COLUMN VISIBILITY
+# ----------------------------
+visible_columns = st.sidebar.multiselect(
+    "Visible Columns",
+    options=filtered_df.columns.tolist(),
+    default=filtered_df.columns.tolist()
+)
+
+filtered_df = filtered_df[visible_columns]
+
+# ----------------------------
+# EDITOR
 # ----------------------------
 st.subheader("Edit Dataset")
 
 edited_df = st.data_editor(
-    df,
+    filtered_df,
     use_container_width=True,
     hide_index=True,
-    num_rows="dynamic"
+    num_rows="dynamic",
+    key="editor"
+)
+
+# ----------------------------
+# HIGHLIGHT CHANGED CELLS
+# ----------------------------
+def highlight_changes(val, row_idx, col_name):
+    try:
+        original_val = str(original_df.iloc[row_idx][col_name])
+
+        if str(val) != original_val:
+            return "background-color: #fff3cd"
+
+    except:
+        pass
+
+    return ""
+
+styled_df = edited_df.style.apply(
+    lambda col: [
+        highlight_changes(v, i, col.name)
+        for i, v in enumerate(col)
+    ]
+)
+
+st.subheader("Highlighted Changes")
+
+st.dataframe(
+    styled_df,
+    use_container_width=True,
+    hide_index=True
 )
 
 st.divider()
@@ -156,11 +255,18 @@ if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
 if st.button("Save to GitHub"):
+
     if not GITHUB_TOKEN:
         st.error("No GitHub token")
+
     else:
         with st.spinner("Saving..."):
-            status, resp = save_to_github(edited_df, reviewer, GITHUB_TOKEN)
+
+            status, resp = save_to_github(
+                edited_df,
+                reviewer,
+                GITHUB_TOKEN
+            )
 
             if status in [200, 201]:
                 st.success("Saved successfully!")
@@ -176,4 +282,5 @@ if st.button("Save to GitHub"):
 # SUMMARY
 # ----------------------------
 st.subheader("Summary")
+
 st.metric("Total Rows", len(edited_df))
