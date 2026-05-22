@@ -197,6 +197,8 @@ gb.configure_selection(selection_mode="disabled")
 
 grid_options = gb.build()
 
+grid_height = st.slider("Grid height (px)", min_value=200, max_value=1200, value=500, step=50, label_visibility="collapsed")
+
 grid_response = AgGrid(
     grid_df,
     gridOptions=grid_options,
@@ -205,7 +207,7 @@ grid_response = AgGrid(
     allow_unsafe_jscode=True,
     fit_columns_on_grid_load=True,
     use_container_width=True,
-    height=500,
+    height=grid_height,
     theme="streamlit",
 )
 
