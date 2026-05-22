@@ -1,9 +1,6 @@
 import streamlit as st
 import pandas as pd
-import requests
 import os
-import base64
-from io import StringIO
 
 from st_aggrid import (
     AgGrid,
@@ -58,7 +55,7 @@ if df_original.empty:
     st.stop()
 
 # =========================================================
-# SHOW SINGLE EDITABLE GRID (ONLY ONCE)
+# SINGLE AGGRID (USER EDITS HERE)
 # =========================================================
 gb = GridOptionsBuilder.from_dataframe(df_original)
 
@@ -86,7 +83,14 @@ grid_response = AgGrid(
 df_edited = pd.DataFrame(grid_response["data"]).fillna("")
 
 # =========================================================
-# COMPUTE CHANGES (NO SECOND GRID)
+# CRITICAL FIX: ALIGN COLUMNS (PREVENT KEYERROR)
+# =========================================================
+df_edited = df_edited.reindex(columns=df_original.columns).fillna("")
+df_original = df_original.reset_index(drop=True)
+df_edited = df_edited.reset_index(drop=True)
+
+# =========================================================
+# BUILD CHANGE MAP
 # =========================================================
 df_display = df_edited.copy()
 
@@ -94,14 +98,14 @@ for col in df_original.columns:
     df_display[f"_changed_{col}"] = df_edited[col] != df_original[col]
 
 # =========================================================
-# CELL COLORING
+# CELL COLORING LOGIC
 # =========================================================
 cell_style = JsCode("""
 function(params) {
     const field = params.colDef.field;
-    const changedField = "_changed_" + field;
+    const changeField = "_changed_" + field;
 
-    if (params.data && params.data[changedField] === true) {
+    if (params.data && params.data[changeField] === true) {
         return {
             backgroundColor: "#fff3cd"
         };
@@ -111,7 +115,7 @@ function(params) {
 """)
 
 # =========================================================
-# RE-RENDER SAME GRID DATA WITH HIGHLIGHT (SAME GRID LOGIC)
+# FINAL GRID (ONLY ONE VISIBLE GRID)
 # =========================================================
 gb2 = GridOptionsBuilder.from_dataframe(df_display)
 
@@ -124,12 +128,12 @@ gb2.configure_default_column(
     cellStyle=cell_style
 )
 
+# hide helper columns
 for col in df_display.columns:
     if col.startswith("_changed_"):
         gb2.configure_column(col, hide=True)
 
-st.subheader("Dataset")
-
+st.subheader("Dataset (Edited cells highlighted)")
 
 AgGrid(
     df_display,
