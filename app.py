@@ -18,8 +18,14 @@ st.markdown(
         max-width: 100%;
     }
 
-    .ag-theme-streamlit {
+    /* Force AG Grid to fill the full container width */
+    .ag-theme-streamlit,
+    .ag-theme-alpine,
+    .ag-theme-balham,
+    div[data-testid="stCustomComponentV1"],
+    div[data-testid="stCustomComponentV1"] > iframe {
         width: 100% !important;
+        min-width: 100% !important;
     }
     </style>
     """,
@@ -185,6 +191,7 @@ for col in df.columns:
 gb.configure_grid_options(
     suppressMovableColumns=False,
     enableRangeSelection=True,
+    domLayout="normal",
 )
 gb.configure_selection(selection_mode="disabled")
 
@@ -196,6 +203,7 @@ grid_response = AgGrid(
     update_mode=GridUpdateMode.VALUE_CHANGED,
     data_return_mode=DataReturnMode.AS_INPUT,   # return ALL rows (filtered ones just hidden)
     allow_unsafe_jscode=True,
+    fit_columns_on_grid_load=True,
     use_container_width=True,
     height=500,
     theme="streamlit",
