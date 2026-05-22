@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 import os
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
 # ----------------------------
 # PAGE CONFIG
@@ -17,7 +18,7 @@ st.markdown(
         max-width: 100%;
     }
 
-    div[data-testid="stDataEditor"] {
+    .ag-theme-streamlit {
         width: 100% !important;
     }
     </style>
@@ -143,53 +144,67 @@ if orig_key not in st.session_state:
 original_df = st.session_state[orig_key]
 
 # ----------------------------
-# FILTER UI
-# ----------------------------
-with st.expander("Filter Rows", expanded=False):
-    fcol1, fcol2, fcol3 = st.columns([2, 3, 2])
-    with fcol1:
-        col_opts = ["(all columns)"] + df.columns.tolist() if not df.empty else ["(all columns)"]
-        filter_column = st.selectbox("Column", col_opts, key="filter_col")
-    with fcol2:
-        filter_text = st.text_input("Contains", key="filter_text", placeholder="Type to filter…")
-    with fcol3:
-        show_changed_only = st.checkbox("Changed rows only", key="show_changed")
-
-# Apply filters
-display_df = df.copy()
-
-if filter_text and not display_df.empty:
-    if filter_column == "(all columns)":
-        mask = display_df.apply(
-            lambda row: row.astype(str).str.contains(filter_text, case=False, na=False).any(),
-            axis=1,
-        )
-    else:
-        mask = display_df[filter_column].astype(str).str.contains(filter_text, case=False, na=False)
-    display_df = display_df[mask]
-
-if show_changed_only and not original_df.empty and not display_df.empty:
-    common_cols = display_df.columns.intersection(original_df.columns)
-    common_idx  = display_df.index.intersection(original_df.index)
-    if len(common_idx):
-        changed_mask = (
-            display_df.loc[common_idx, common_cols] != original_df.loc[common_idx, common_cols]
-        ).any(axis=1)
-        display_df = display_df.loc[common_idx[changed_mask]]
-
-st.caption(f"Showing {len(display_df)} / {len(df)} rows")
-
-# ----------------------------
-# EDITOR (NO SCHEMA LIMITS)
+# EDITOR WITH COLUMN-HEADER FILTERS + CHANGE HIGHLIGHTING
 # ----------------------------
 st.subheader("Edit Dataset")
 
-edited_df = st.data_editor(
-    df,
-    use_container_width=True,
-    hide_index=True,
-    num_rows="dynamic"
+# Embed original values as hidden columns so the JS cellStyle can compare
+grid_df = df.copy()
+if not original_df.empty:
+    for col in df.columns.intersection(original_df.columns):
+        grid_df[f"__orig_{col}"] = original_df[col].reindex(df.index).fillna("")
+
+gb = GridOptionsBuilder.from_dataframe(grid_df)
+
+# Visible, editable columns with floating (in-header) filter + change highlight
+for col in df.columns:
+    orig_field = f"__orig_{col}"
+    cell_style_js = JsCode(f"""
+        function(params) {{
+            var orig = params.data['{orig_field}'];
+            if (orig !== undefined && String(params.value) !== String(orig)) {{
+                return {{backgroundColor: '#fff3cd', color: '#856404', fontWeight: 'bold'}};
+            }}
+            return null;
+        }}
+    """)
+    gb.configure_column(
+        col,
+        editable=True,
+        filter="agTextColumnFilter",
+        floatingFilter=True,
+        cellStyle=cell_style_js,
+        resizable=True,
+        sortable=True,
+    )
+
+# Hide the shadow __orig_ columns
+for col in df.columns:
+    gb.configure_column(f"__orig_{col}", hide=True)
+
+gb.configure_grid_options(
+    suppressMovableColumns=False,
+    enableRangeSelection=True,
 )
+gb.configure_selection(selection_mode="disabled")
+
+grid_options = gb.build()
+
+grid_response = AgGrid(
+    grid_df,
+    gridOptions=grid_options,
+    update_mode=GridUpdateMode.VALUE_CHANGED,
+    data_return_mode=DataReturnMode.AS_INPUT,   # return ALL rows (filtered ones just hidden)
+    allow_unsafe_jscode=True,
+    use_container_width=True,
+    height=500,
+    theme="streamlit",
+)
+
+# Extract edited data (drop hidden __orig_ columns before saving)
+returned = pd.DataFrame(grid_response["data"]) if grid_response["data"] is not None else df.copy()
+visible_cols = [c for c in returned.columns if not c.startswith("__orig_")]
+edited_df = returned[visible_cols] if not returned.empty else df.copy()
 
 st.divider()
 
@@ -211,6 +226,8 @@ if st.button("Save to GitHub"):
             if status in [200, 201]:
                 st.success("Saved successfully!")
                 st.cache_data.clear()
+                # Update baseline so highlights reset after a successful save
+                st.session_state[orig_key] = edited_df.copy()
 
             elif status == 409:
                 st.error("Conflict: file updated elsewhere. Reload and retry.")
