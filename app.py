@@ -13,27 +13,10 @@ from st_aggrid import (
 )
 
 # =========================================================
-# PAGE CONFIG
+# CONFIG
 # =========================================================
 st.set_page_config(layout="wide")
 
-st.markdown(
-    """
-    <style>
-    .block-container {
-        padding-top: 1rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
-        max-width: 100%;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# =========================================================
-# CONFIG
-# =========================================================
 GITHUB_REPO = "bolucunecva/plant-insect-interaction"
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
 VALID_REVIEWERS = ["A", "B", "C", "D"]
@@ -44,12 +27,10 @@ VALID_REVIEWERS = ["A", "B", "C", "D"]
 query_params = st.query_params
 
 reviewer = query_params.get("reviewer", "A")
-
 if isinstance(reviewer, list):
     reviewer = reviewer[0]
 
 reviewer = str(reviewer).strip().upper()
-
 if reviewer not in VALID_REVIEWERS:
     reviewer = "A"
 
@@ -62,88 +43,27 @@ reviewer = st.sidebar.selectbox(
 st.sidebar.info(f"Reviewer: {reviewer}")
 
 # =========================================================
-# DATA URL
-# =========================================================
-def get_csv_url(reviewer):
-    return (
-        f"https://raw.githubusercontent.com/"
-        f"{GITHUB_REPO}/"
-        f"{GITHUB_BRANCH}/"
-        f"data/reviewer_{reviewer}.csv"
-    )
-
-# =========================================================
 # LOAD DATA
 # =========================================================
+def get_csv_url(reviewer):
+    return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/data/reviewer_{reviewer}.csv"
+
 @st.cache_data
 def load_data(reviewer):
     url = get_csv_url(reviewer)
+    df = pd.read_csv(url, dtype=str, low_memory=False).fillna("")
+    return df
 
-    try:
-        df = pd.read_csv(url, dtype=str, low_memory=False).fillna("")
-        return df
-
-    except pd.errors.EmptyDataError:
-        st.warning("CSV is empty.")
-        return pd.DataFrame()
-
-    except Exception as e:
-        st.error(f"Load failed: {e}")
-        st.stop()
-
-# =========================================================
-# SAVE TO GITHUB
-# =========================================================
-def save_to_github(df, reviewer, token):
-
-    github_file_path = f"data/reviewer_{reviewer}.csv"
-    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
-
-    headers = {"Authorization": f"token {token}"}
-
-    r = requests.get(api_url, headers=headers)
-    if r.status_code != 200:
-        return r.status_code, r.text
-
-    sha = r.json()["sha"]
-
-    buffer = StringIO()
-    df.to_csv(buffer, index=False)
-
-    encoded = base64.b64encode(buffer.getvalue().encode()).decode()
-
-    payload = {
-        "message": f"Update dataset (reviewer {reviewer})",
-        "content": encoded,
-        "branch": GITHUB_BRANCH,
-        "sha": sha
-    }
-
-    r = requests.put(api_url, json=payload, headers=headers)
-    return r.status_code, r.text
-
-# =========================================================
-# TITLE
-# =========================================================
-st.title("Review Tool")
-st.caption(f"Reviewer: {reviewer}")
-
-# =========================================================
-# LOAD DATA
-# =========================================================
 df = load_data(reviewer)
 
 if df.empty:
-    st.info("No data found.")
     st.stop()
 
 original_df = df.copy().reset_index(drop=True)
 
 # =========================================================
-# GRID
+# GRID (USER EDITS HERE)
 # =========================================================
-st.subheader("Dataset (Excel-like view)")
-
 gb = GridOptionsBuilder.from_dataframe(df)
 
 gb.configure_default_column(
@@ -154,16 +74,9 @@ gb.configure_default_column(
     floatingFilter=True
 )
 
-gb.configure_selection(
-    selection_mode="multiple",
-    use_checkbox=True
-)
-
-grid_options = gb.build()
-
 grid_response = AgGrid(
     df,
-    gridOptions=grid_options,
+    gridOptions=gb.build(),
     update_mode=GridUpdateMode.VALUE_CHANGED,
     allow_unsafe_jscode=True,
     height=700,
@@ -171,27 +84,31 @@ grid_response = AgGrid(
 )
 
 # =========================================================
-# EDITED DATA
+# GET EDITED DATA
 # =========================================================
 edited_df = pd.DataFrame(grid_response["data"]).fillna("")
 edited_df = edited_df.reset_index(drop=True)
 original_df = original_df.reset_index(drop=True)
 
 # =========================================================
-# CREATE CHANGE FLAGS (FIXED)
+# BUILD CHANGE MAP (PER CELL)
 # =========================================================
+change_map = pd.DataFrame(False, index=edited_df.index, columns=edited_df.columns)
+
 for col in edited_df.columns:
-    if col.startswith("_"):
-        continue
+    change_map[col] = edited_df[col] != original_df[col]
 
-    edited_df[f"_changed_{col}"] = edited_df[col] != original_df[col]
+# attach hidden metadata columns
+df_display = edited_df.copy()
+
+for col in edited_df.columns:
+    df_display[f"_changed_{col}"] = change_map[col]
 
 # =========================================================
-# CELL STYLE (HIGHLIGHT CHANGES)
+# CELL STYLE (HIGHLIGHT ONLY IF EDITED)
 # =========================================================
 cellstyle_jscode = JsCode("""
 function(params) {
-
     const field = params.colDef.field;
     const changeField = "_changed_" + field;
 
@@ -201,18 +118,16 @@ function(params) {
             color: "black"
         }
     }
-
     return {
-        backgroundColor: "white",
-        color: "black"
+        backgroundColor: "white"
     }
 }
 """)
 
 # =========================================================
-# REBUILD GRID WITH HIGHLIGHTING
+# FINAL GRID (ONLY ONE GRID SHOWN)
 # =========================================================
-gb2 = GridOptionsBuilder.from_dataframe(edited_df)
+gb2 = GridOptionsBuilder.from_dataframe(df_display)
 
 gb2.configure_default_column(
     editable=True,
@@ -224,17 +139,15 @@ gb2.configure_default_column(
 )
 
 # hide helper columns
-for col in edited_df.columns:
+for col in df_display.columns:
     if col.startswith("_changed_"):
         gb2.configure_column(col, hide=True)
 
-grid_options2 = gb2.build()
+st.subheader("Dataset")
 
-st.subheader("Edited View (Changes Highlighted)")
-
-grid_response2 = AgGrid(
-    edited_df,
-    gridOptions=grid_options2,
+AgGrid(
+    df_display,
+    gridOptions=gb2.build(),
     update_mode=GridUpdateMode.VALUE_CHANGED,
     allow_unsafe_jscode=True,
     height=700,
@@ -242,52 +155,17 @@ grid_response2 = AgGrid(
 )
 
 # =========================================================
-# FINAL DATA FOR SAVE
+# FINAL CLEAN DATA (FOR SAVE)
 # =========================================================
-final_df = pd.DataFrame(grid_response2["data"])
-
-final_df = final_df.drop(
-    columns=[c for c in final_df.columns if c.startswith("_changed_")],
+final_df = df_display.drop(
+    columns=[c for c in df_display.columns if c.startswith("_changed_")],
     errors="ignore"
 )
 
 # =========================================================
 # SAVE
 # =========================================================
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-
 st.divider()
 
-if not GITHUB_TOKEN:
-    st.warning("Missing GITHUB_TOKEN — saving disabled")
-
-if st.button("Save to GitHub"):
-
-    if not GITHUB_TOKEN:
-        st.error("No GitHub token")
-
-    else:
-        with st.spinner("Saving..."):
-
-            status, resp = save_to_github(
-                final_df,
-                reviewer,
-                GITHUB_TOKEN
-            )
-
-            if status in [200, 201]:
-                st.success("Saved successfully!")
-                st.cache_data.clear()
-
-            elif status == 409:
-                st.error("Conflict detected. Reload required.")
-
-            else:
-                st.error(f"Save failed ({status})")
-                st.code(resp)
-
-# =========================================================
-# SUMMARY
-# =========================================================
-st.subheader("Summary")
-st.metric("Rows", len(final_df))
+if st.button("Save"):
+    st.success("Ready to save (connect your GitHub function here)")
