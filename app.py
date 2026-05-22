@@ -21,11 +21,26 @@ st.markdown(
     /* Force AG Grid to fill the full container width */
     .ag-theme-streamlit,
     .ag-theme-alpine,
-    .ag-theme-balham,
-    div[data-testid="stCustomComponentV1"],
-    div[data-testid="stCustomComponentV1"] > iframe {
+    .ag-theme-balham {
         width: 100% !important;
         min-width: 100% !important;
+    }
+
+    /* Make the AG Grid iframe wrapper mouse-resizable */
+    div[data-testid="stCustomComponentV1"] {
+        resize: vertical !important;
+        overflow: hidden !important;
+        min-height: 200px !important;
+        width: 100% !important;
+        min-width: 100% !important;
+        /* Show a grab cursor hint at bottom edge */
+        padding-bottom: 6px;
+        box-sizing: border-box;
+    }
+
+    div[data-testid="stCustomComponentV1"] > iframe {
+        width: 100% !important;
+        height: 100% !important;
     }
     </style>
     """,
@@ -197,8 +212,6 @@ gb.configure_selection(selection_mode="disabled")
 
 grid_options = gb.build()
 
-grid_height = st.slider("Grid height (px)", min_value=200, max_value=1200, value=500, step=50, label_visibility="collapsed")
-
 grid_response = AgGrid(
     grid_df,
     gridOptions=grid_options,
@@ -207,7 +220,7 @@ grid_response = AgGrid(
     allow_unsafe_jscode=True,
     fit_columns_on_grid_load=True,
     use_container_width=True,
-    height=grid_height,
+    height=500,
     theme="streamlit",
 )
 
