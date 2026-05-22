@@ -165,44 +165,21 @@ if orig_key not in st.session_state:
 
 original_df = st.session_state[orig_key]
 
-work_key = f"working_df_{reviewer}"
-if work_key not in st.session_state:
-    st.session_state[work_key] = df.copy()
-
-working_df = st.session_state[work_key]
-
 # ----------------------------
 # EDITOR WITH COLUMN-HEADER FILTERS + CHANGE HIGHLIGHTING
 # ----------------------------
 st.subheader("Edit Dataset")
 
-with st.expander("Table Structure", expanded=False):
-    col_name_input = st.text_input(
-        "New column name",
-        key=f"new_col_name_{reviewer}",
-        placeholder="e.g. notes"
-    )
-    if st.button("Add Column To End", key=f"add_col_btn_{reviewer}"):
-        new_col = col_name_input.strip()
-        if not new_col:
-            st.warning("Please enter a column name.")
-        elif new_col in working_df.columns:
-            st.warning(f"Column '{new_col}' already exists.")
-        else:
-            # Pandas appends a new column at the end by default.
-            st.session_state[work_key][new_col] = ""
-            st.rerun()
-
 # Embed original values as hidden columns so the JS cellStyle can compare
-grid_df = working_df.copy()
+grid_df = df.copy()
 if not original_df.empty:
-    for col in working_df.columns.intersection(original_df.columns):
-        grid_df[f"__orig_{col}"] = original_df[col].reindex(working_df.index).fillna("")
+    for col in df.columns.intersection(original_df.columns):
+        grid_df[f"__orig_{col}"] = original_df[col].reindex(df.index).fillna("")
 
 gb = GridOptionsBuilder.from_dataframe(grid_df)
 
 # Visible, editable columns with floating (in-header) filter + change highlight
-for col in working_df.columns:
+for col in df.columns:
     orig_field = f"__orig_{col}"
     cell_style_js = JsCode(f"""
         function(params) {{
@@ -224,7 +201,7 @@ for col in working_df.columns:
     )
 
 # Hide the shadow __orig_ columns
-for col in working_df.columns.intersection(original_df.columns):
+for col in df.columns:
     gb.configure_column(f"__orig_{col}", hide=True)
 
 gb.configure_grid_options(
@@ -249,10 +226,9 @@ grid_response = AgGrid(
 )
 
 # Extract edited data (drop hidden __orig_ columns before saving)
-returned = pd.DataFrame(grid_response["data"]) if grid_response["data"] is not None else working_df.copy()
+returned = pd.DataFrame(grid_response["data"]) if grid_response["data"] is not None else df.copy()
 visible_cols = [c for c in returned.columns if not c.startswith("__orig_")]
-edited_df = returned[visible_cols] if not returned.empty else working_df.copy()
-st.session_state[work_key] = edited_df.copy()
+edited_df = returned[visible_cols] if not returned.empty else df.copy()
 
 st.divider()
 
@@ -264,7 +240,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
-if st.button("Save to GitHub"):
+if st.button("Save"):
     if not GITHUB_TOKEN:
         st.error("No GitHub token")
     else:
@@ -276,7 +252,6 @@ if st.button("Save to GitHub"):
                 st.cache_data.clear()
                 # Update baseline so highlights reset after a successful save
                 st.session_state[orig_key] = edited_df.copy()
-                st.session_state[work_key] = edited_df.copy()
 
             elif status == 409:
                 st.error("Conflict: file updated elsewhere. Reload and retry.")
