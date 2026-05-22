@@ -50,21 +50,17 @@ def get_csv_url(reviewer):
 
 @st.cache_data
 def load_data(reviewer):
-    url = get_csv_url(reviewer)
-    df = pd.read_csv(url, dtype=str, low_memory=False).fillna("")
-    return df
+    return pd.read_csv(get_csv_url(reviewer), dtype=str).fillna("")
 
-df = load_data(reviewer)
+df_original = load_data(reviewer)
 
-if df.empty:
+if df_original.empty:
     st.stop()
 
-original_df = df.copy().reset_index(drop=True)
-
 # =========================================================
-# GRID (USER EDITS HERE)
+# SHOW SINGLE EDITABLE GRID (ONLY ONCE)
 # =========================================================
-gb = GridOptionsBuilder.from_dataframe(df)
+gb = GridOptionsBuilder.from_dataframe(df_original)
 
 gb.configure_default_column(
     editable=True,
@@ -75,57 +71,47 @@ gb.configure_default_column(
 )
 
 grid_response = AgGrid(
-    df,
+    df_original,
     gridOptions=gb.build(),
     update_mode=GridUpdateMode.VALUE_CHANGED,
     allow_unsafe_jscode=True,
     height=700,
-    theme="streamlit"
+    theme="streamlit",
+    key="main_grid"
 )
 
 # =========================================================
 # GET EDITED DATA
 # =========================================================
-edited_df = pd.DataFrame(grid_response["data"]).fillna("")
-edited_df = edited_df.reset_index(drop=True)
-original_df = original_df.reset_index(drop=True)
+df_edited = pd.DataFrame(grid_response["data"]).fillna("")
 
 # =========================================================
-# BUILD CHANGE MAP (PER CELL)
+# COMPUTE CHANGES (NO SECOND GRID)
 # =========================================================
-change_map = pd.DataFrame(False, index=edited_df.index, columns=edited_df.columns)
+df_display = df_edited.copy()
 
-for col in edited_df.columns:
-    change_map[col] = edited_df[col] != original_df[col]
-
-# attach hidden metadata columns
-df_display = edited_df.copy()
-
-for col in edited_df.columns:
-    df_display[f"_changed_{col}"] = change_map[col]
+for col in df_original.columns:
+    df_display[f"_changed_{col}"] = df_edited[col] != df_original[col]
 
 # =========================================================
-# CELL STYLE (HIGHLIGHT ONLY IF EDITED)
+# CELL COLORING
 # =========================================================
-cellstyle_jscode = JsCode("""
+cell_style = JsCode("""
 function(params) {
     const field = params.colDef.field;
-    const changeField = "_changed_" + field;
+    const changedField = "_changed_" + field;
 
-    if (params.data && params.data[changeField] === true) {
+    if (params.data && params.data[changedField] === true) {
         return {
-            backgroundColor: "#fff3cd",
-            color: "black"
-        }
+            backgroundColor: "#fff3cd"
+        };
     }
-    return {
-        backgroundColor: "white"
-    }
+    return null;
 }
 """)
 
 # =========================================================
-# FINAL GRID (ONLY ONE GRID SHOWN)
+# RE-RENDER SAME GRID DATA WITH HIGHLIGHT (SAME GRID LOGIC)
 # =========================================================
 gb2 = GridOptionsBuilder.from_dataframe(df_display)
 
@@ -135,15 +121,15 @@ gb2.configure_default_column(
     sortable=True,
     resizable=True,
     floatingFilter=True,
-    cellStyle=cellstyle_jscode
+    cellStyle=cell_style
 )
 
-# hide helper columns
 for col in df_display.columns:
     if col.startswith("_changed_"):
         gb2.configure_column(col, hide=True)
 
 st.subheader("Dataset")
+
 
 AgGrid(
     df_display,
@@ -151,21 +137,6 @@ AgGrid(
     update_mode=GridUpdateMode.VALUE_CHANGED,
     allow_unsafe_jscode=True,
     height=700,
-    theme="streamlit"
+    theme="streamlit",
+    key="highlight_grid"
 )
-
-# =========================================================
-# FINAL CLEAN DATA (FOR SAVE)
-# =========================================================
-final_df = df_display.drop(
-    columns=[c for c in df_display.columns if c.startswith("_changed_")],
-    errors="ignore"
-)
-
-# =========================================================
-# SAVE
-# =========================================================
-st.divider()
-
-if st.button("Save"):
-    st.success("Ready to save (connect your GitHub function here)")
