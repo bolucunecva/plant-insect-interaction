@@ -137,32 +137,62 @@ if df.empty:
     st.info("No data found.")
     st.stop()
 
-# =========================================================
-# ORIGINAL COPY (IMPORTANT FOR COLOR DIFF)
-# =========================================================
 original_df = df.copy().reset_index(drop=True)
-df = df.reset_index(drop=True)
-
-df["_row_id"] = df.index
-original_df["_row_id"] = original_df.index
 
 # =========================================================
-# CREATE CHANGE FLAGS (CRITICAL FIX)
+# GRID
 # =========================================================
-for col in df.columns:
-    if col in ["_row_id"]:
+st.subheader("Dataset (Excel-like view)")
+
+gb = GridOptionsBuilder.from_dataframe(df)
+
+gb.configure_default_column(
+    editable=True,
+    filter=True,
+    sortable=True,
+    resizable=True,
+    floatingFilter=True
+)
+
+gb.configure_selection(
+    selection_mode="multiple",
+    use_checkbox=True
+)
+
+grid_options = gb.build()
+
+grid_response = AgGrid(
+    df,
+    gridOptions=grid_options,
+    update_mode=GridUpdateMode.VALUE_CHANGED,
+    allow_unsafe_jscode=True,
+    height=700,
+    theme="streamlit"
+)
+
+# =========================================================
+# EDITED DATA
+# =========================================================
+edited_df = pd.DataFrame(grid_response["data"]).fillna("")
+edited_df = edited_df.reset_index(drop=True)
+original_df = original_df.reset_index(drop=True)
+
+# =========================================================
+# CREATE CHANGE FLAGS (FIXED)
+# =========================================================
+for col in edited_df.columns:
+    if col.startswith("_"):
         continue
 
-    df[f"_changed_{col}"] = df[col] != original_df[col]
+    edited_df[f"_changed_{col}"] = edited_df[col] != original_df[col]
 
 # =========================================================
-# CELL COLORING
+# CELL STYLE (HIGHLIGHT CHANGES)
 # =========================================================
 cellstyle_jscode = JsCode("""
 function(params) {
 
     const field = params.colDef.field;
-
     const changeField = "_changed_" + field;
 
     if (params.data && params.data[changeField] === true) {
@@ -180,11 +210,11 @@ function(params) {
 """)
 
 # =========================================================
-# GRID SETUP
+# REBUILD GRID WITH HIGHLIGHTING
 # =========================================================
-gb = GridOptionsBuilder.from_dataframe(df)
+gb2 = GridOptionsBuilder.from_dataframe(edited_df)
 
-gb.configure_default_column(
+gb2.configure_default_column(
     editable=True,
     filter=True,
     sortable=True,
@@ -193,28 +223,18 @@ gb.configure_default_column(
     cellStyle=cellstyle_jscode
 )
 
-# Hide helper columns
-gb.configure_column("_row_id", hide=True)
-
-for col in df.columns:
+# hide helper columns
+for col in edited_df.columns:
     if col.startswith("_changed_"):
-        gb.configure_column(col, hide=True)
+        gb2.configure_column(col, hide=True)
 
-gb.configure_selection(
-    selection_mode="multiple",
-    use_checkbox=True
-)
+grid_options2 = gb2.build()
 
-grid_options = gb.build()
+st.subheader("Edited View (Changes Highlighted)")
 
-# =========================================================
-# TABLE
-# =========================================================
-st.subheader("Dataset (Excel-like view)")
-
-grid_response = AgGrid(
-    df,
-    gridOptions=grid_options,
+grid_response2 = AgGrid(
+    edited_df,
+    gridOptions=grid_options2,
     update_mode=GridUpdateMode.VALUE_CHANGED,
     allow_unsafe_jscode=True,
     height=700,
@@ -222,23 +242,21 @@ grid_response = AgGrid(
 )
 
 # =========================================================
-# EDITED DATA
+# FINAL DATA FOR SAVE
 # =========================================================
-edited_df = pd.DataFrame(grid_response["data"])
+final_df = pd.DataFrame(grid_response2["data"])
 
-# Remove helper columns before saving
-drop_cols = [c for c in edited_df.columns if c.startswith("_changed_")]
-edited_df = edited_df.drop(columns=drop_cols, errors="ignore")
-
-if "_row_id" in edited_df.columns:
-    edited_df = edited_df.drop(columns=["_row_id"])
-
-st.divider()
+final_df = final_df.drop(
+    columns=[c for c in final_df.columns if c.startswith("_changed_")],
+    errors="ignore"
+)
 
 # =========================================================
 # SAVE
 # =========================================================
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+
+st.divider()
 
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
@@ -252,7 +270,7 @@ if st.button("Save to GitHub"):
         with st.spinner("Saving..."):
 
             status, resp = save_to_github(
-                edited_df,
+                final_df,
                 reviewer,
                 GITHUB_TOKEN
             )
@@ -272,5 +290,4 @@ if st.button("Save to GitHub"):
 # SUMMARY
 # =========================================================
 st.subheader("Summary")
-
-st.metric("Rows", len(edited_df))
+st.metric("Rows", len(final_df))
