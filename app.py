@@ -240,7 +240,7 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
-if st.button("Save to GitHub"):
+if st.button("Save"):
     if not GITHUB_TOKEN:
         st.error("No GitHub token")
     else:
