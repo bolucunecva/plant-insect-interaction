@@ -6,10 +6,7 @@ import os
 # ----------------------------
 # PAGE CONFIG
 # ----------------------------
-st.set_page_config(
-    page_title="Review Tool",
-    layout="wide"
-)
+st.set_page_config(layout="wide")
 
 st.markdown(
     """
@@ -22,10 +19,6 @@ st.markdown(
 
     div[data-testid="stDataEditor"] {
         width: 100% !important;
-    }
-
-    section[data-testid="stSidebar"] {
-        width: 320px !important;
     }
     </style>
     """,
@@ -64,28 +57,20 @@ reviewer = st.sidebar.selectbox(
 st.sidebar.info(f"Reviewer: {reviewer}")
 
 # ----------------------------
-# RAW CSV URL
+# FAST RAW URL (IMPORTANT FIX)
 # ----------------------------
 def get_csv_url(reviewer):
-    return (
-        f"https://raw.githubusercontent.com/"
-        f"{GITHUB_REPO}/{GITHUB_BRANCH}/data/reviewer_{reviewer}.csv"
-    )
+    return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/data/reviewer_{reviewer}.csv"
 
 # ----------------------------
-# LOAD DATA
+# LOAD DATA (FAST + STREAMING FRIENDLY)
 # ----------------------------
 @st.cache_data
 def load_data(reviewer):
     url = get_csv_url(reviewer)
 
     try:
-        df = pd.read_csv(
-            url,
-            dtype=str,
-            low_memory=False
-        ).fillna("")
-
+        df = pd.read_csv(url, dtype=str, low_memory=False).fillna("")
         return df
 
     except pd.errors.EmptyDataError:
@@ -97,26 +82,21 @@ def load_data(reviewer):
         st.stop()
 
 # ----------------------------
-# SAVE TO GITHUB
+# SAVE BACK TO GITHUB (API ONLY FOR WRITE)
 # ----------------------------
 def save_to_github(df, reviewer, token):
     import base64
     from io import StringIO
 
     github_file_path = f"data/reviewer_{reviewer}.csv"
-
-    api_url = (
-        f"https://api.github.com/repos/"
-        f"{GITHUB_REPO}/contents/{github_file_path}"
-    )
+    api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{github_file_path}"
 
     headers = {
         "Authorization": f"token {token}"
     }
 
-    # Get current SHA
+    # Get SHA
     r = requests.get(api_url, headers=headers)
-
     if r.status_code != 200:
         return r.status_code, r.text
 
@@ -124,12 +104,9 @@ def save_to_github(df, reviewer, token):
 
     # Convert dataframe to CSV
     buffer = StringIO()
-
     df.to_csv(buffer, index=False)
 
-    encoded = base64.b64encode(
-        buffer.getvalue().encode()
-    ).decode()
+    encoded = base64.b64encode(buffer.getvalue().encode()).decode()
 
     payload = {
         "message": f"Update dataset (reviewer {reviewer})",
@@ -138,12 +115,7 @@ def save_to_github(df, reviewer, token):
         "sha": sha
     }
 
-    r = requests.put(
-        api_url,
-        json=payload,
-        headers=headers
-    )
-
+    r = requests.put(api_url, json=payload, headers=headers)
     return r.status_code, r.text
 
 # ----------------------------
@@ -162,122 +134,61 @@ if df.empty:
     df = pd.DataFrame()
 
 # ----------------------------
-# SESSION STATE
+# TRACK ORIGINAL DATA (for change detection)
 # ----------------------------
-if "original_df" not in st.session_state:
-    st.session_state.original_df = df.copy()
+orig_key = f"original_df_{reviewer}"
+if orig_key not in st.session_state:
+    st.session_state[orig_key] = df.copy()
+
+original_df = st.session_state[orig_key]
 
 # ----------------------------
-# FILTERS
+# FILTER UI
 # ----------------------------
-st.sidebar.subheader("Filters")
+with st.expander("Filter Rows", expanded=False):
+    fcol1, fcol2, fcol3 = st.columns([2, 3, 2])
+    with fcol1:
+        col_opts = ["(all columns)"] + df.columns.tolist() if not df.empty else ["(all columns)"]
+        filter_column = st.selectbox("Column", col_opts, key="filter_col")
+    with fcol2:
+        filter_text = st.text_input("Contains", key="filter_text", placeholder="Type to filter…")
+    with fcol3:
+        show_changed_only = st.checkbox("Changed rows only", key="show_changed")
 
-filtered_df = df.copy()
+# Apply filters
+display_df = df.copy()
 
-for col in df.columns:
-
-    unique_values = sorted(
-        [
-            str(v)
-            for v in df[col].dropna().unique()
-            if str(v).strip() != ""
-        ]
-    )
-
-    # Avoid huge filters
-    if 0 < len(unique_values) <= 50:
-
-        selected_values = st.sidebar.multiselect(
-            f"{col}",
-            unique_values,
-            default=unique_values
+if filter_text and not display_df.empty:
+    if filter_column == "(all columns)":
+        mask = display_df.apply(
+            lambda row: row.astype(str).str.contains(filter_text, case=False, na=False).any(),
+            axis=1,
         )
+    else:
+        mask = display_df[filter_column].astype(str).str.contains(filter_text, case=False, na=False)
+    display_df = display_df[mask]
 
-        filtered_df = filtered_df[
-            filtered_df[col].astype(str).isin(selected_values)
-        ]
+if show_changed_only and not original_df.empty and not display_df.empty:
+    common_cols = display_df.columns.intersection(original_df.columns)
+    common_idx  = display_df.index.intersection(original_df.index)
+    if len(common_idx):
+        changed_mask = (
+            display_df.loc[common_idx, common_cols] != original_df.loc[common_idx, common_cols]
+        ).any(axis=1)
+        display_df = display_df.loc[common_idx[changed_mask]]
 
-# ----------------------------
-# HIGHLIGHT CHANGES
-# ----------------------------
-def highlight_changes(row_idx, col_name, value):
-
-    try:
-        original_df = st.session_state.original_df
-
-        if row_idx >= len(original_df):
-            return ""
-
-        old_value = str(original_df.iloc[row_idx][col_name])
-        new_value = str(value)
-
-        if old_value != new_value:
-            return "background-color: #fff3cd"
-
-    except:
-        pass
-
-    return ""
+st.caption(f"Showing {len(display_df)} / {len(df)} rows")
 
 # ----------------------------
-# EDITOR
+# EDITOR (NO SCHEMA LIMITS)
 # ----------------------------
 st.subheader("Edit Dataset")
 
 edited_df = st.data_editor(
-    filtered_df,
+    df,
     use_container_width=True,
     hide_index=True,
-    num_rows="dynamic",
-    key="editor"
-)
-
-# ----------------------------
-# VISUAL CHANGE PREVIEW
-# ----------------------------
-st.subheader("Changed Cells Preview")
-
-styled_df = edited_df.copy()
-
-def style_dataframe(df_to_style):
-
-    styles = pd.DataFrame(
-        "",
-        index=df_to_style.index,
-        columns=df_to_style.columns
-    )
-
-    original_df = st.session_state.original_df
-
-    common_rows = min(
-        len(df_to_style),
-        len(original_df)
-    )
-
-    for row in range(common_rows):
-
-        for col in df_to_style.columns:
-
-            try:
-                old = str(original_df.iloc[row][col])
-                new = str(df_to_style.iloc[row][col])
-
-                if old != new:
-                    styles.iloc[row, df_to_style.columns.get_loc(col)] = (
-                        "background-color: #fff3cd"
-                    )
-
-            except:
-                pass
-
-    return styles
-
-st.dataframe(
-    styled_df.style.apply(
-        style_dataframe,
-        axis=None
-    ),
-    use_container_width=True
+    num_rows="dynamic"
 )
 
 st.divider()
@@ -290,85 +201,25 @@ GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
-col1, col2 = st.columns([1, 5])
+if st.button("Save to GitHub"):
+    if not GITHUB_TOKEN:
+        st.error("No GitHub token")
+    else:
+        with st.spinner("Saving..."):
+            status, resp = save_to_github(edited_df, reviewer, GITHUB_TOKEN)
 
-with col1:
+            if status in [200, 201]:
+                st.success("Saved successfully!")
+                st.cache_data.clear()
 
-    if st.button("Save to GitHub"):
+            elif status == 409:
+                st.error("Conflict: file updated elsewhere. Reload and retry.")
 
-        if not GITHUB_TOKEN:
-            st.error("No GitHub token")
-
-        else:
-            with st.spinner("Saving..."):
-
-                status, resp = save_to_github(
-                    edited_df,
-                    reviewer,
-                    GITHUB_TOKEN
-                )
-
-                if status in [200, 201]:
-
-                    st.success("Saved successfully!")
-
-                    st.cache_data.clear()
-
-                    st.session_state.original_df = edited_df.copy()
-
-                elif status == 409:
-
-                    st.error(
-                        "Conflict: file updated elsewhere. "
-                        "Reload and retry."
-                    )
-
-                else:
-
-                    st.error(
-                        f"Save failed ({status}): {resp}"
-                    )
-
-with col2:
-    st.info(
-        "Changed cells are highlighted in yellow "
-        "in the preview table below."
-    )
+            else:
+                st.error(f"Save failed ({status}): {resp}")
 
 # ----------------------------
 # SUMMARY
 # ----------------------------
 st.subheader("Summary")
-
-c1, c2 = st.columns(2)
-
-with c1:
-    st.metric("Total Rows", len(edited_df))
-
-with c2:
-
-    changed_cells = 0
-
-    original_df = st.session_state.original_df
-
-    common_rows = min(
-        len(edited_df),
-        len(original_df)
-    )
-
-    for row in range(common_rows):
-
-        for col in edited_df.columns:
-
-            try:
-                if (
-                    str(original_df.iloc[row][col])
-                    !=
-                    str(edited_df.iloc[row][col])
-                ):
-                    changed_cells += 1
-
-            except:
-                pass
-
-    st.metric("Changed Cells", changed_cells)
+st.metric("Total Rows", len(edited_df))
