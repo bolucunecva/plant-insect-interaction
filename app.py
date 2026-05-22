@@ -26,14 +26,15 @@ st.markdown(
         min-width: 100% !important;
     }
 
-    /* Make the AG Grid iframe wrapper mouse-resizable */
+    /* Make the AG Grid iframe wrapper mouse-resizable in both directions */
     div[data-testid="stCustomComponentV1"] {
-        resize: vertical !important;
+        resize: both !important;
         overflow: hidden !important;
         min-height: 200px !important;
+        min-width: 300px !important;
+        max-width: 100% !important;
         width: 100% !important;
-        min-width: 100% !important;
-        /* Show a grab cursor hint at bottom edge */
+        /* Show a grab cursor hint at bottom-right corner */
         padding-bottom: 6px;
         box-sizing: border-box;
     }
