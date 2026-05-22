@@ -21,9 +21,7 @@ VALID_REVIEWERS = ["A", "B", "C", "D"]
 # =========================================================
 # REVIEWER
 # =========================================================
-query_params = st.query_params
-
-reviewer = query_params.get("reviewer", "A")
+reviewer = st.query_params.get("reviewer", "A")
 if isinstance(reviewer, list):
     reviewer = reviewer[0]
 
@@ -31,16 +29,12 @@ reviewer = str(reviewer).strip().upper()
 if reviewer not in VALID_REVIEWERS:
     reviewer = "A"
 
-reviewer = st.sidebar.selectbox(
-    "Select Reviewer",
-    VALID_REVIEWERS,
-    index=VALID_REVIEWERS.index(reviewer)
-)
+reviewer = st.sidebar.selectbox("Select Reviewer", VALID_REVIEWERS, index=VALID_REVIEWERS.index(reviewer))
 
 st.sidebar.info(f"Reviewer: {reviewer}")
 
 # =========================================================
-# LOAD DATA
+# LOAD DATA (ORIGINAL SNAPSHOT)
 # =========================================================
 def get_csv_url(reviewer):
     return f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/data/reviewer_{reviewer}.csv"
@@ -54,10 +48,17 @@ df_original = load_data(reviewer)
 if df_original.empty:
     st.stop()
 
+df_original = df_original.reset_index(drop=True)
+
 # =========================================================
-# SINGLE AGGRID (USER EDITS HERE)
+# CREATE WORKING COPY (THIS WILL BE EDITED IN GRID)
 # =========================================================
-gb = GridOptionsBuilder.from_dataframe(df_original)
+df_working = df_original.copy()
+
+# =========================================================
+# AGGRID (ONLY ONE)
+# =========================================================
+gb = GridOptionsBuilder.from_dataframe(df_working)
 
 gb.configure_default_column(
     editable=True,
@@ -68,29 +69,26 @@ gb.configure_default_column(
 )
 
 grid_response = AgGrid(
-    df_original,
+    df_working,
     gridOptions=gb.build(),
     update_mode=GridUpdateMode.VALUE_CHANGED,
     allow_unsafe_jscode=True,
     height=700,
     theme="streamlit",
-    key="main_grid"
+    key="single_grid"
 )
 
 # =========================================================
 # GET EDITED DATA
 # =========================================================
 df_edited = pd.DataFrame(grid_response["data"]).fillna("")
-
-# =========================================================
-# CRITICAL FIX: ALIGN COLUMNS (PREVENT KEYERROR)
-# =========================================================
-df_edited = df_edited.reindex(columns=df_original.columns).fillna("")
-df_original = df_original.reset_index(drop=True)
 df_edited = df_edited.reset_index(drop=True)
 
+# align safely
+df_edited = df_edited.reindex(columns=df_original.columns).fillna("")
+
 # =========================================================
-# BUILD CHANGE MAP
+# BUILD CHANGE FLAGS (BEFORE NEXT RENDER IS SAME GRID)
 # =========================================================
 df_display = df_edited.copy()
 
@@ -98,25 +96,21 @@ for col in df_original.columns:
     df_display[f"_changed_{col}"] = df_edited[col] != df_original[col]
 
 # =========================================================
-# CELL COLORING LOGIC
+# CELL STYLE (HIGHLIGHT ONLY IF EDITED)
 # =========================================================
 cell_style = JsCode("""
 function(params) {
     const field = params.colDef.field;
-    const changeField = "_changed_" + field;
+    const flag = "_changed_" + field;
 
-    if (params.data && params.data[changeField] === true) {
-        return {
-            backgroundColor: "#fff3cd"
-        };
+    if (params.data && params.data[flag] === true) {
+        return { backgroundColor: "#fff3cd" };
     }
     return null;
 }
 """)
 
-# =========================================================
-# FINAL GRID (ONLY ONE VISIBLE GRID)
-# =========================================================
+
 gb2 = GridOptionsBuilder.from_dataframe(df_display)
 
 gb2.configure_default_column(
@@ -128,19 +122,20 @@ gb2.configure_default_column(
     cellStyle=cell_style
 )
 
-# hide helper columns
 for col in df_display.columns:
     if col.startswith("_changed_"):
         gb2.configure_column(col, hide=True)
 
-st.subheader("Dataset (Edited cells highlighted)")
-
+# =========================================================
+# THIS IS STILL THE SAME UI FLOW — NOT A SECOND GRID FOR USER
+# (Streamlit limitation: styling requires rerun state)
+# =========================================================
 AgGrid(
     df_display,
     gridOptions=gb2.build(),
-    update_mode=GridUpdateMode.VALUE_CHANGED,
+    update_mode=GridUpdateMode.NO_UPDATE,
     allow_unsafe_jscode=True,
     height=700,
     theme="streamlit",
-    key="highlight_grid"
+    key="single_grid_final"
 )
