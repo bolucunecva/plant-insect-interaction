@@ -1,16 +1,16 @@
 accepted_insect_taxon,accepted_insect_family,accepted_plant_family,accepted_plant_taxon,plant_part_used_by_interacting_stage_norm,plant_insect_interaction_type_normalized,direct_plant_interaction,comments,reviewer
-Curculio elephas,Curculionidae,Fagaceae,deneme,fruit,feeding|herbivory_tissue_damage,yes,,Reviewer A
+Curculio elephas,Curculionidae,Fagaceae,Castanea sativa,fruit,feeding|herbivory_tissue_damage,yes,,Reviewer A
 Hylobius abietis,Curculionidae,Pinaceae,Picea abies,stem,feeding,yes,,Reviewer A
-Hylobius abietis,aaaa,CCCC,Picea abies,root,feeding,yes,,Reviewer A
+Hylobius abietis,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
 Hylastes cunicularius,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
 Helicoverpa armigera,Noctuidae,Euphorbiaceae,Ricinus,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Pieris brassicae,DDD,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Homoeosoma electella,Pyralidae,CCC,Helianthus annuus,flower,oviposition,yes,,Reviewer A
-Homoeosoma electella,aaa,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
-Cochylichroa hospes,EEEE,Asteraceae,DDD,aaaa,oviposition,yes,,Reviewer A
-Cochylichroa hospes,Tortricidae,EEEEE,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
+Pieris brassicae,Pieridae,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
+Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
+Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
+Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
+Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
 Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,leaf|stem,feeding,yes,,Reviewer A
-Cylindrocopturus adspersus,Curculionidae,ccc,Helianthus annuus,,feeding,yes,,Reviewer A
+Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,,feeding,yes,,Reviewer A
 Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,,oviposition,yes,,Reviewer A
 Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,stem,feeding,yes,,Reviewer A
 Smicronyx fulvus,Curculionidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,Reviewer A
@@ -24,17 +24,17 @@ Melanagromyza minimoides,Agromyzidae,Asteraceae,Helianthus annuus,flower|seed,fe
 Helicoverpa armigera,Noctuidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
 Helicoverpa armigera,Noctuidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer B
 Lygus lineolaris,Miridae,Asteraceae,Helianthus annuus,seed,feeding,yes,,Reviewer B
-Thermobia domestica,Lepismatidae,Poaceae,BBBB,flower,feeding,yes,,Reviewer B
+Thermobia domestica,Lepismatidae,Poaceae,Zea mays,flower,feeding,yes,,Reviewer B
 Thermobia domestica,Lepismatidae,Amaryllidaceae,Amaryllis,flower,feeding,yes,,Reviewer B
 Thermobia domestica,Lepismatidae,Ranunculaceae,Aquilegia vulgaris,flower,feeding,yes,,Reviewer B
-Thermobia domestica,EEE,DD,CCC,flower,feeding,yes,,Reviewer B
+Thermobia domestica,Lepismatidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,Reviewer B
 Riptortus pedestris,Alydidae,Fabaceae,Glycine max,root,feeding,yes,,Reviewer B
 Bemisia tabaci,Aleyrodidae,Solanaceae,Solanum lycopersicum,leaf,feeding,yes,,Reviewer B
-Acyrthosiphon pisum,Aphididae,Fabaceae,Trifolium repens,CCCC,feeding,yes,,Reviewer B
-Sitobion miscanthi,Aphididae,Poaceae,DDD,stem,feeding,yes,,Reviewer B
-Leptinotarsa decemlineata,FFF,fff,Solanum tuberosum,leaf,feeding,yes,,Reviewer B
-GGGGGG,Curculionidae,Rubiaceae,Coffea arabica,fruit,feeding,yes,,Reviewer B
-Dendroctonus frontalis,Curculionidae,gggg,Pinus,stem,feeding,yes,,Reviewer B
+Acyrthosiphon pisum,Aphididae,Fabaceae,Trifolium repens,stem,feeding,yes,,Reviewer B
+Sitobion miscanthi,Aphididae,Poaceae,Triticum aestivum,stem,feeding,yes,,Reviewer B
+Leptinotarsa decemlineata,Chrysomelidae,Solanaceae,Solanum tuberosum,leaf,feeding,yes,,Reviewer B
+Hypothenemus hampei,Curculionidae,Rubiaceae,Coffea arabica,fruit,feeding,yes,,Reviewer B
+Dendroctonus frontalis,Curculionidae,Pinaceae,Pinus,stem,feeding,yes,,Reviewer B
 Frankliniella occidentalis,Thripidae,Amaryllidaceae,Allium cepa,leaf,feeding,yes,,Reviewer B
 Thrips tabaci,Thripidae,Amaryllidaceae,Allium cepa,leaf,feeding,yes,,Reviewer B
 Phyllonorycter blancardella,Gracillariidae,Rosaceae,Malus domestica,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer B
