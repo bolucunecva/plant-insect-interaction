@@ -4,13 +4,13 @@ Hylobius abietis,Curculionidae,Pinaceae,Picea abies,stem,feeding,yes,,Reviewer A
 Hylobius abietis,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
 Hylastes cunicularius,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
 Helicoverpa armigera,Noctuidae,Euphorbiaceae,Ricinus,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Pieris brassicae,aaa,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
+Pieris brassicae,Pieridae,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
 Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
 Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
-Cochylichroa hospes,aaaa,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
+Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
 Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
 Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,leaf|stem,feeding,yes,,Reviewer A
-Cylindrocopturus adspersus,Curculionidae,bbb,Helianthus annuus,,feeding,yes,,Reviewer A
+Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,,feeding,yes,,Reviewer A
 Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,,oviposition,yes,,Reviewer A
 Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,stem,feeding,yes,,Reviewer A
 Smicronyx fulvus,Curculionidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,Reviewer A
