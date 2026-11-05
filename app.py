@@ -68,7 +68,31 @@ RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{GIT
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
 BLOB_URL = f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs"
 
-GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+def _get_token():
+    tok = os.getenv("GITHUB_TOKEN")
+    if not tok:
+        try:
+            tok = st.secrets.get("GITHUB_TOKEN")
+        except Exception:
+            tok = None
+    return (tok or "").strip() or None   # strip stray spaces/newlines from copy-paste
+
+
+GITHUB_TOKEN = _get_token()
+
+
+class GitHubAuthError(Exception):
+    pass
+
+
+def _check(r):
+    if r.status_code in (401, 403):
+        raise GitHubAuthError(
+            f"GitHub rejected the token ({r.status_code}). It may be expired, revoked or mistyped, "
+            f"or lack access to {GITHUB_REPO}. Create a new token with Contents: Read and write "
+            f"on this repo and update GITHUB_TOKEN."
+        )
+    r.raise_for_status()
 
 
 def normalize_reviewer(value) -> str:
@@ -102,11 +126,11 @@ def fetch_latest(token=None):
 
     headers = {"Authorization": f"token {token}"}
     r = requests.get(API_URL, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=60)
-    r.raise_for_status()
+    _check(r)
     sha = r.json()["sha"]
 
     b = requests.get(f"{BLOB_URL}/{sha}", headers=headers, timeout=120)
-    b.raise_for_status()
+    _check(b)
     text = base64.b64decode(b.json()["content"]).decode("utf-8")
     return _read_csv_text(text), sha
 
@@ -160,7 +184,13 @@ ss.setdefault("flash", None)
 
 
 def load_into_session():
-    df, sha = fetch_latest(GITHUB_TOKEN)
+    try:
+        df, sha = fetch_latest(GITHUB_TOKEN)
+        ss["auth_error"] = None
+    except GitHubAuthError as e:
+        # Token is bad: still let people view/edit via the public raw file
+        df, sha = fetch_latest(None)
+        ss["auth_error"] = str(e)
     ss["full_df"] = df
     ss["sha"] = sha
     ss["grid_version"] += 1
@@ -312,6 +342,8 @@ st.divider()
 # ----------------------------
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
+elif ss.get("auth_error"):
+    st.error(ss["auth_error"] + " Saving will fail until this is fixed.")
 
 if st.button("Save", type="primary", disabled=not GITHUB_TOKEN):
     if not changes:
