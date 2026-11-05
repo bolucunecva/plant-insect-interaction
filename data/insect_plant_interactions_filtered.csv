@@ -27,11 +27,11 @@ Lygus lineolaris,Miridae,Asteraceae,Helianthus annuus,seed,feeding,yes,,Reviewer
 Thermobia domestica,Lepismatidae,Poaceae,BBBB,flower,feeding,yes,,Reviewer B
 Thermobia domestica,Lepismatidae,Amaryllidaceae,Amaryllis,flower,feeding,yes,,Reviewer B
 Thermobia domestica,Lepismatidae,Ranunculaceae,Aquilegia vulgaris,flower,feeding,yes,,Reviewer B
-Thermobia domestica,Lepismatidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,Reviewer B
+Thermobia domestica,Lepismatidae,Asteraceae,CCC,flower,feeding,yes,,Reviewer B
 Riptortus pedestris,Alydidae,Fabaceae,Glycine max,root,feeding,yes,,Reviewer B
 Bemisia tabaci,Aleyrodidae,Solanaceae,Solanum lycopersicum,leaf,feeding,yes,,Reviewer B
 Acyrthosiphon pisum,Aphididae,Fabaceae,Trifolium repens,CCCC,feeding,yes,,Reviewer B
-Sitobion miscanthi,Aphididae,Poaceae,Triticum aestivum,stem,feeding,yes,,Reviewer B
+Sitobion miscanthi,Aphididae,Poaceae,DDD,stem,feeding,yes,,Reviewer B
 Leptinotarsa decemlineata,Chrysomelidae,Solanaceae,Solanum tuberosum,leaf,feeding,yes,,Reviewer B
 Hypothenemus hampei,Curculionidae,Rubiaceae,Coffea arabica,fruit,feeding,yes,,Reviewer B
 Dendroctonus frontalis,Curculionidae,Pinaceae,Pinus,stem,feeding,yes,,Reviewer B
