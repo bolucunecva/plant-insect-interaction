@@ -4,10 +4,10 @@ Hylobius abietis,Curculionidae,Pinaceae,Picea abies,stem,feeding,yes,,Reviewer A
 Hylobius abietis,Curculionidae,CCCC,Picea abies,root,feeding,yes,,Reviewer A
 Hylastes cunicularius,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
 Helicoverpa armigera,Noctuidae,Euphorbiaceae,Ricinus,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Pieris brassicae,Pieridae,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
+Pieris brassicae,DDD,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
 Homoeosoma electella,Pyralidae,CCC,Helianthus annuus,flower,oviposition,yes,,Reviewer A
 Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
-Cochylichroa hospes,Tortricidae,Asteraceae,DDD,aaaa,oviposition,yes,,Reviewer A
+Cochylichroa hospes,EEEE,Asteraceae,DDD,aaaa,oviposition,yes,,Reviewer A
 Cochylichroa hospes,Tortricidae,EEEEE,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
 Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,leaf|stem,feeding,yes,,Reviewer A
 Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,,feeding,yes,,Reviewer A
