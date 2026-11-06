@@ -1,6 +1,6 @@
 accepted_insect_taxon,accepted_insect_family,accepted_plant_family,accepted_plant_taxon,plant_part_used_by_interacting_stage_norm,plant_insect_interaction_type_normalized,direct_plant_interaction,comments,reviewer
 Curculio elephas,Curculionidae,Fagaceae,Castanea sativa,fruit,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Hylobius abietis,Curculionidae,cccc,Picea abies,stem,feeding,yes,,Reviewer A
+Hylobius abietis,Curculionidae,Pinaceae,Picea abies,stem,feeding,yes,,Reviewer A
 Hylobius abietis,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
 Hylastes cunicularius,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
 Helicoverpa armigera,Noctuidae,Euphorbiaceae,Ricinus,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
