@@ -65,7 +65,6 @@ VOCAB_FILE_PATH = os.getenv("VOCAB_FILE_PATH", "data/controlled_vocabulary.json"
 REVIEWER_COL = "reviewer"          # shown in the grid; filter it to see one reviewer's rows
 REVIEWER_EDITABLE = False          # set True if reviewers may reassign rows
 ROW_ID = "__row_id"                # hidden: position of the row in the full CSV
-ORIG_PREFIX = "__orig_"            # hidden: saved values, for change highlighting
 
 # Controlled vocabulary: columns that may only take values from a fixed list.
 # Fill the lists in here, OR put a JSON file at VOCAB_FILE_PATH in the repo, e.g.
@@ -125,6 +124,10 @@ def gh_write_text(path, text, sha, message, token):
                         headers=_headers(token), timeout=120)
 
 
+def _line_end(text) -> str:
+    return "\r\n" if text and "\r\n" in text[:10000] else "\n"
+
+
 def _read_csv_text(text) -> pd.DataFrame:
     if not text or not text.strip():
         return pd.DataFrame()
@@ -135,7 +138,9 @@ def fetch_latest(token=None):
     text, sha = gh_read_text(GITHUB_FILE_PATH, token)
     if text is None:
         raise FileNotFoundError(GITHUB_FILE_PATH)
-    return _read_csv_text(text), sha
+    df = _read_csv_text(text)
+    df.attrs["line_end"] = _line_end(text)
+    return df, sha
 
 
 def save_changes(changes, token, expected_rows, max_retries=3):
@@ -158,7 +163,7 @@ def save_changes(changes, token, expected_rows, max_retries=3):
             latest.iat[rid, latest.columns.get_loc(col)] = val
 
         buffer = StringIO()
-        latest.to_csv(buffer, index=False)
+        latest.to_csv(buffer, index=False, lineterminator=latest.attrs.get("line_end", "\n"))
         r = gh_write_text(GITHUB_FILE_PATH, buffer.getvalue(), sha,
                           f"Update dataset ({len(changes)} cells)", token)
         if r.status_code in (200, 201):
@@ -189,7 +194,7 @@ def add_note(author, note, token, max_retries=3):
             df = pd.DataFrame(columns=NOTE_COLS)
         df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
         buf = StringIO()
-        df.to_csv(buf, index=False)
+        df.to_csv(buf, index=False, lineterminator=_line_end(text))
         r = gh_write_text(NOTES_FILE_PATH, buf.getvalue(), sha,
                           f"Add review note ({row['author'] or 'anonymous'})", token)
         if r.status_code in (200, 201):
@@ -330,10 +335,12 @@ if REVIEWER_COL in data_cols:
 
 edit_cols = [c for c in data_cols if REVIEWER_EDITABLE or c != REVIEWER_COL]
 
-# Baseline = last saved values (from session copy of the file)
 grid_df = df[[ROW_ID] + data_cols].copy()
-for col in edit_cols:
-    grid_df[f"{ORIG_PREFIX}{col}"] = df[col]
+
+# Edited cells are remembered in the browser (EDITS) and only those are sent back
+# to Python. Sending the whole 30k-row table back after every edit was too slow,
+# which is why changes were never counted and Save had nothing to save.
+EDITS = f"window.__reviewEdits_{ss['grid_version']}"
 
 gb = GridOptionsBuilder.from_dataframe(grid_df)
 
@@ -356,8 +363,9 @@ for col in data_cols:
                 if (allowed && allowed.indexOf(v) === -1) {{
                     return {{backgroundColor: '#f8d7da', color: '#842029'}};
                 }}
-                var orig = params.data['{ORIG_PREFIX}{col}'];
-                if (orig !== undefined && v !== String(orig)) {{
+                var store = {EDITS} || {{}};
+                var e = store[params.data['{ROW_ID}'] + '|{col}'];
+                if (e && v !== e.orig) {{
                     return {{backgroundColor: '#fff3cd', color: '#856404', fontWeight: 'bold'}};
                 }}
                 return null;
@@ -375,8 +383,44 @@ for col in data_cols:
     gb.configure_column(col, **opts)
 
 gb.configure_column(ROW_ID, hide=True)
-for col in edit_cols:
-    gb.configure_column(f"{ORIG_PREFIX}{col}", hide=True)
+
+# Record every edit in the browser; keep the original value of the first edit
+record_edit = JsCode(f"""
+    function(params) {{
+        {EDITS} = {EDITS} || {{}};
+        var col = params.colDef.field;
+        var key = params.data['{ROW_ID}'] + '|' + col;
+        var prev = {EDITS}[key];
+        {EDITS}[key] = {{
+            row_id: params.data['{ROW_ID}'],
+            col: col,
+            value: params.newValue == null ? '' : String(params.newValue),
+            orig: prev ? prev.orig : (params.oldValue == null ? '' : String(params.oldValue))
+        }};
+    }}
+""")
+
+# What the grid sends back to Python: only the edited cells
+return_edits = JsCode(f"""
+    function(p) {{
+        var e = p.eventData;
+        if (e && e.colDef && e.data) {{        // make sure the latest edit is included
+            {EDITS} = {EDITS} || {{}};
+            var key = e.data['{ROW_ID}'] + '|' + e.colDef.field;
+            var prev = {EDITS}[key];
+            {EDITS}[key] = {{
+                row_id: e.data['{ROW_ID}'],
+                col: e.colDef.field,
+                value: e.newValue == null ? '' : String(e.newValue),
+                orig: prev ? prev.orig : (e.oldValue == null ? '' : String(e.oldValue))
+            }};
+        }}
+        var out = [];
+        var store = {EDITS} || {{}};
+        for (var k in store) {{ out.push({{row_id: store[k].row_id, col: store[k].col, value: store[k].value}}); }}
+        return {{edits: out}};
+    }}
+""")
 
 # Finish any open cell edit as soon as the mouse leaves the grid. Without this,
 # typing in a cell and then clicking "Save" sends the edit and the click at the
@@ -396,6 +440,7 @@ gb.configure_grid_options(
     domLayout="normal",
     stopEditingWhenCellsLoseFocus=True,   # commit a cell edit as soon as you click elsewhere
     onCellEditingStarted=finish_edit_on_leave,
+    onCellValueChanged=record_edit,
 )
 gb.configure_selection(selection_mode="disabled")
 
@@ -403,7 +448,8 @@ grid_response = AgGrid(
     grid_df,
     gridOptions=gb.build(),
     update_on=["cellValueChanged"],             # only re-run on edits (not on every filter keystroke)
-    data_return_mode=DataReturnMode.AS_INPUT,   # always all rows, even when filtered
+    data_return_mode=DataReturnMode.CUSTOM,     # return only the edited cells
+    custom_jscode_for_grid_return=return_edits,
     allow_unsafe_jscode=True,
     fit_columns_on_grid_load=True,
     use_container_width=True,
@@ -413,23 +459,30 @@ grid_response = AgGrid(
     key=f"grid_{ss['grid_version']}",
 )
 
-returned = grid_response["data"]
-returned = pd.DataFrame(returned) if returned is not None and len(returned) else grid_df
-edited_df = returned[[ROW_ID] + edit_cols].copy()
-edited_df[ROW_ID] = pd.to_numeric(edited_df[ROW_ID]).astype(int)
-edited_df[edit_cols] = edited_df[edit_cols].fillna("").astype(str)
-
 # ----------------------------
 # DETECT CHANGED CELLS (vs last saved values)
 # ----------------------------
-saved = full_df.iloc[edited_df[ROW_ID].to_numpy()][edit_cols].reset_index(drop=True)
-current = edited_df[edit_cols].reset_index(drop=True)
-diff = current.ne(saved)
+raw = getattr(grid_response, "raw_data", None)
+if raw is None and isinstance(grid_response, dict):
+    raw = grid_response
+edits = (raw or {}).get("edits", []) if isinstance(raw, dict) else []
+# Remember the latest edits so they survive reruns caused by other widgets
+if raw is not None:
+    ss["edits"] = {"version": ss["grid_version"], "items": edits}
+elif ss.get("edits", {}).get("version") == ss["grid_version"]:
+    edits = ss["edits"]["items"]
 
 changes = []
-for i, col in zip(*diff.to_numpy().nonzero()):
-    c = edit_cols[col]
-    changes.append((int(edited_df[ROW_ID].iat[i]), c, current.iat[i, col]))
+for e in edits:
+    try:
+        rid, col = int(e["row_id"]), str(e["col"])
+    except (KeyError, TypeError, ValueError):
+        continue
+    if col not in edit_cols or not 0 <= rid < len(full_df):
+        continue
+    val = "" if e.get("value") is None else str(e["value"])
+    if val != full_df.iat[rid, full_df.columns.get_loc(col)]:   # reverted edits drop out
+        changes.append((rid, col, val))
 
 # New values must come from the controlled vocabulary
 bad = [(rid, c, v) for rid, c, v in changes if c in vocab and v not in vocab[c]]
