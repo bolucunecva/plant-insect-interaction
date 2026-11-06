@@ -1,11 +1,14 @@
 import base64
+import json
 import os
+import re
+from datetime import datetime, timezone
 from io import StringIO
 
 import pandas as pd
 import requests
 import streamlit as st
-from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
+from st_aggrid import AgGrid, GridOptionsBuilder, DataReturnMode, JsCode
 
 # ----------------------------
 # PAGE CONFIG
@@ -56,48 +59,82 @@ st.markdown(
 GITHUB_REPO = "bolucunecva/plant-insect-interaction"
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
 GITHUB_FILE_PATH = os.getenv("GITHUB_FILE_PATH", "data/insect_plant_interactions_filtered.csv")
+NOTES_FILE_PATH = os.getenv("NOTES_FILE_PATH", "data/review_notes.csv")
+VOCAB_FILE_PATH = os.getenv("VOCAB_FILE_PATH", "data/controlled_vocabulary.json")
 
 REVIEWER_COL = "reviewer"          # shown in the grid; filter it to see one reviewer's rows
 REVIEWER_EDITABLE = False          # set True if reviewers may reassign rows
 ROW_ID = "__row_id"                # hidden: position of the row in the full CSV
 ORIG_PREFIX = "__orig_"            # hidden: saved values, for change highlighting
 
-RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{GITHUB_FILE_PATH}"
-API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
-BLOB_URL = f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs"
+# Controlled vocabulary: columns that may only take values from a fixed list.
+# Fill the lists in here, OR put a JSON file at VOCAB_FILE_PATH in the repo, e.g.
+#   {"plant_part": ["leaf", "stem", "root"], "direct_interactions": [...], ...}
+# The JSON file wins over the lists below. An empty list means "use the distinct
+# values already in the column" (a quick start; replace with the real list).
+CONTROLLED_VOCAB = {
+    "plant_part": [],
+    "direct_interactions": [],
+    "plant_insect_interactions": [],
+}
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
+API_BASE = f"https://api.github.com/repos/{GITHUB_REPO}"
+RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}"
 
 
 # ----------------------------
-# GITHUB I/O
+# GITHUB I/O (generic, any file in the repo)
 # ----------------------------
-def _read_csv_text(text: str) -> pd.DataFrame:
-    if not text.strip():
+def _headers(token):
+    return {"Authorization": f"token {token}"}
+
+
+def gh_read_text(path, token=None):
+    """Return (text, sha) for a repo file, or (None, None) if it does not exist."""
+    if not token:
+        r = requests.get(f"{RAW_BASE}/{path}", timeout=60)
+        if r.status_code == 404:
+            return None, None
+        r.raise_for_status()
+        r.encoding = "utf-8"
+        return r.text, None
+
+    r = requests.get(f"{API_BASE}/contents/{path}", headers=_headers(token),
+                     params={"ref": GITHUB_BRANCH}, timeout=60)
+    if r.status_code == 404:
+        return None, None
+    r.raise_for_status()
+    sha = r.json()["sha"]
+    # Read the blob for that exact sha so content and sha always match (no stale CDN copy)
+    b = requests.get(f"{API_BASE}/git/blobs/{sha}", headers=_headers(token), timeout=120)
+    b.raise_for_status()
+    return base64.b64decode(b.json()["content"]).decode("utf-8"), sha
+
+
+def gh_write_text(path, text, sha, message, token):
+    """Create/update a repo file. Returns the requests response."""
+    payload = {
+        "message": message,
+        "content": base64.b64encode(text.encode("utf-8")).decode(),
+        "branch": GITHUB_BRANCH,
+    }
+    if sha:
+        payload["sha"] = sha
+    return requests.put(f"{API_BASE}/contents/{path}", json=payload,
+                        headers=_headers(token), timeout=120)
+
+
+def _read_csv_text(text) -> pd.DataFrame:
+    if not text or not text.strip():
         return pd.DataFrame()
     return pd.read_csv(StringIO(text), dtype=str, keep_default_na=False, low_memory=False)
 
 
 def fetch_latest(token=None):
-    """
-    Return (dataframe, sha) for the current file on the branch.
-    With a token, the content is read from the git blob for that exact sha,
-    so the content and sha always match (no stale CDN copy).
-    """
-    if not token:
-        r = requests.get(RAW_URL, timeout=60)
-        r.raise_for_status()
-        r.encoding = "utf-8"
-        return _read_csv_text(r.text), None
-
-    headers = {"Authorization": f"token {token}"}
-    r = requests.get(API_URL, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=60)
-    r.raise_for_status()
-    sha = r.json()["sha"]
-
-    b = requests.get(f"{BLOB_URL}/{sha}", headers=headers, timeout=120)
-    b.raise_for_status()
-    text = base64.b64decode(b.json()["content"]).decode("utf-8")
+    text, sha = gh_read_text(GITHUB_FILE_PATH, token)
+    if text is None:
+        raise FileNotFoundError(GITHUB_FILE_PATH)
     return _read_csv_text(text), sha
 
 
@@ -105,39 +142,91 @@ def save_changes(changes, token, expected_rows, max_retries=3):
     """
     Apply ONLY the changed cells to the latest version of the file and commit it.
     changes: list of (row_id, column, new_value).
-    Returns (status_code, message, updated_full_df_or_None, new_sha_or_None).
+    Returns (status_code, message, updated_full_df_or_None).
     """
-    headers = {"Authorization": f"token {token}"}
-
     for _ in range(max_retries):
         latest, sha = fetch_latest(token)
 
         if len(latest) != expected_rows:
-            return 409, "The file's row count changed since it was loaded. Click 'Reload from GitHub'.", None, None
+            return 409, "The file's row count changed since it was loaded. Click 'Reload from GitHub'.", None
 
         missing = {c for _, c, _ in changes} - set(latest.columns)
         if missing:
-            return 409, f"Columns no longer in the file: {sorted(missing)}. Click 'Reload from GitHub'.", None, None
+            return 409, f"Columns no longer in the file: {sorted(missing)}. Click 'Reload from GitHub'.", None
 
         for rid, col, val in changes:
             latest.iat[rid, latest.columns.get_loc(col)] = val
 
         buffer = StringIO()
         latest.to_csv(buffer, index=False)
-        payload = {
-            "message": f"Update dataset ({len(changes)} cells)",
-            "content": base64.b64encode(buffer.getvalue().encode("utf-8")).decode(),
-            "branch": GITHUB_BRANCH,
-            "sha": sha,
-        }
-        r = requests.put(API_URL, json=payload, headers=headers, timeout=120)
+        r = gh_write_text(GITHUB_FILE_PATH, buffer.getvalue(), sha,
+                          f"Update dataset ({len(changes)} cells)", token)
         if r.status_code in (200, 201):
-            new_sha = r.json().get("content", {}).get("sha")
-            return r.status_code, "ok", latest, new_sha
+            return r.status_code, "ok", latest
         if r.status_code != 409:          # 409 = someone committed in between -> retry
-            return r.status_code, r.text, None, None
+            return r.status_code, r.text, None
 
-    return 409, "File kept changing during save. Please retry.", None, None
+    return 409, "File kept changing during save. Please retry.", None
+
+
+NOTE_COLS = ["timestamp_utc", "author", "note"]
+
+
+def load_notes(token=None):
+    text, _ = gh_read_text(NOTES_FILE_PATH, token)
+    df = _read_csv_text(text)
+    return df if not df.empty else pd.DataFrame(columns=NOTE_COLS)
+
+
+def add_note(author, note, token, max_retries=3):
+    """Append one note to the shared notes CSV (created on first use)."""
+    row = {"timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+           "author": author.strip(), "note": note.strip()}
+    for _ in range(max_retries):
+        text, sha = gh_read_text(NOTES_FILE_PATH, token)
+        df = _read_csv_text(text)
+        if df.empty:
+            df = pd.DataFrame(columns=NOTE_COLS)
+        df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+        buf = StringIO()
+        df.to_csv(buf, index=False)
+        r = gh_write_text(NOTES_FILE_PATH, buf.getvalue(), sha,
+                          f"Add review note ({row['author'] or 'anonymous'})", token)
+        if r.status_code in (200, 201):
+            return True, df
+        if r.status_code != 409:
+            return False, r.text
+    return False, "Notes file kept changing. Please retry."
+
+
+# ----------------------------
+# CONTROLLED VOCABULARY
+# ----------------------------
+def _norm_name(name: str) -> str:
+    return re.sub(r"[\s_\-]+", "_", str(name).strip().lower())
+
+
+def build_vocab(df: pd.DataFrame, token=None) -> dict:
+    """Map actual CSV column name -> sorted list of allowed values ('' always allowed)."""
+    configured = dict(CONTROLLED_VOCAB)
+    try:
+        text, _ = gh_read_text(VOCAB_FILE_PATH, token)
+        if text:
+            configured.update(json.loads(text))
+    except Exception as e:
+        st.warning(f"Could not read {VOCAB_FILE_PATH}: {e}")
+
+    by_norm = {_norm_name(c): c for c in df.columns}
+    vocab = {}
+    for name, values in configured.items():
+        col = by_norm.get(_norm_name(name))
+        if col is None:
+            continue
+        values = [str(v).strip() for v in (values or []) if str(v).strip()]
+        if not values:  # fall back to what is already in the data
+            values = sorted({v.strip() for v in df[col] if str(v).strip()})
+        vocab[col] = [""] + sorted(dict.fromkeys(values), key=str.lower)
+    return vocab
 
 
 # ----------------------------
@@ -152,6 +241,8 @@ def load_into_session():
     df, sha = fetch_latest(GITHUB_TOKEN)
     ss["full_df"] = df.reset_index(drop=True)
     ss["sha"] = sha
+    ss["vocab"] = build_vocab(ss["full_df"], GITHUB_TOKEN)
+    ss["notes"] = load_notes(GITHUB_TOKEN)
     ss["grid_version"] += 1
 
 
@@ -164,6 +255,7 @@ if "full_df" not in ss:
         st.stop()
 
 full_df = ss["full_df"]
+vocab = ss["vocab"]
 
 if full_df.empty:
     st.error("CSV is empty.")
@@ -177,10 +269,8 @@ st.title("Review Tool")
 top_l, top_r = st.columns([4, 1])
 with top_l:
     st.caption(
-        f"{len(full_df)} records. Use the filter box under the "
-        f"'{REVIEWER_COL}' header to show one reviewer's rows."
-        if REVIEWER_COL in full_df.columns
-        else f"{len(full_df)} records (no '{REVIEWER_COL}' column in the CSV)."
+        f"{len(full_df)} records. Filter the '{REVIEWER_COL}' column (box under its header) "
+        "to see one reviewer's rows. Double-click a cell to edit; press Enter to finish."
     )
 with top_r:
     if st.button("Reload from GitHub", use_container_width=True):
@@ -193,6 +283,37 @@ with top_r:
 if ss["flash"]:
     st.success(ss["flash"])
     ss["flash"] = None
+
+# ----------------------------
+# GLOBAL REVIEW NOTES
+# ----------------------------
+notes_df = ss["notes"]
+with st.expander(f"Review notes ({len(notes_df)})", expanded=False):
+    if len(notes_df):
+        st.dataframe(notes_df.iloc[::-1], hide_index=True, use_container_width=True)
+    else:
+        st.caption("No notes yet.")
+    with st.form("add_note", clear_on_submit=True):
+        n1, n2 = st.columns([1, 4])
+        author = n1.text_input("Your name / reviewer ID")
+        note = n2.text_area("Note", height=80,
+                            placeholder="General comments about the dataset or the review…")
+        submitted = st.form_submit_button("Add note", disabled=not GITHUB_TOKEN)
+    if submitted:
+        if not note.strip():
+            st.warning("Write a note first.")
+        else:
+            with st.spinner("Saving note..."):
+                try:
+                    ok, result = add_note(author, note, GITHUB_TOKEN)
+                except Exception as e:
+                    ok, result = False, str(e)
+            if ok:
+                ss["notes"] = result
+                ss["flash"] = "Note saved."
+                st.rerun()
+            else:
+                st.error(f"Could not save note: {result}")
 
 st.subheader("Edit Dataset")
 
@@ -218,17 +339,6 @@ gb = GridOptionsBuilder.from_dataframe(grid_df)
 
 for col in data_cols:
     editable = col in edit_cols
-    cell_style_js = None
-    if editable:
-        cell_style_js = JsCode(f"""
-            function(params) {{
-                var orig = params.data['{ORIG_PREFIX}{col}'];
-                if (orig !== undefined && String(params.value ?? '') !== String(orig)) {{
-                    return {{backgroundColor: '#fff3cd', color: '#856404', fontWeight: 'bold'}};
-                }}
-                return null;
-            }}
-        """)
     opts = dict(
         editable=editable,
         filter="agTextColumnFilter",
@@ -236,8 +346,30 @@ for col in data_cols:
         resizable=True,
         sortable=True,
     )
-    if cell_style_js is not None:
-        opts["cellStyle"] = cell_style_js
+    if editable:
+        allowed = json.dumps(vocab.get(col)) if col in vocab else "null"
+        # Yellow = changed but not saved; red = value outside the controlled vocabulary
+        opts["cellStyle"] = JsCode(f"""
+            function(params) {{
+                var allowed = {allowed};
+                var v = String(params.value ?? '');
+                if (allowed && allowed.indexOf(v) === -1) {{
+                    return {{backgroundColor: '#f8d7da', color: '#842029'}};
+                }}
+                var orig = params.data['{ORIG_PREFIX}{col}'];
+                if (orig !== undefined && v !== String(orig)) {{
+                    return {{backgroundColor: '#fff3cd', color: '#856404', fontWeight: 'bold'}};
+                }}
+                return null;
+            }}
+        """)
+    if col in vocab:
+        opts.update(
+            cellEditor="agSelectCellEditor",
+            cellEditorParams={"values": vocab[col]},
+            singleClickEdit=True,
+            headerTooltip="Controlled vocabulary: pick a value from the list",
+        )
     if col == REVIEWER_COL:
         opts.update(pinned="left", width=130)
     gb.configure_column(col, **opts)
@@ -246,18 +378,31 @@ gb.configure_column(ROW_ID, hide=True)
 for col in edit_cols:
     gb.configure_column(f"{ORIG_PREFIX}{col}", hide=True)
 
+# Finish any open cell edit as soon as the mouse leaves the grid. Without this,
+# typing in a cell and then clicking "Save" sends the edit and the click at the
+# same moment, and Streamlit drops the click (looks like "nothing happened").
+finish_edit_on_leave = JsCode("""
+    function(params) {
+        if (window.__stopEditHooked) { return; }
+        window.__stopEditHooked = true;
+        var stop = function() { params.api.stopEditing(); };
+        document.documentElement.addEventListener('mouseleave', stop);
+        window.addEventListener('blur', stop);
+    }
+""")
+
 gb.configure_grid_options(
     suppressMovableColumns=False,
-    enableRangeSelection=True,
     domLayout="normal",
     stopEditingWhenCellsLoseFocus=True,   # commit a cell edit as soon as you click elsewhere
+    onCellEditingStarted=finish_edit_on_leave,
 )
 gb.configure_selection(selection_mode="disabled")
 
 grid_response = AgGrid(
     grid_df,
     gridOptions=gb.build(),
-    update_mode=GridUpdateMode.VALUE_CHANGED,
+    update_on=["cellValueChanged"],             # only re-run on edits (not on every filter keystroke)
     data_return_mode=DataReturnMode.AS_INPUT,   # always all rows, even when filtered
     allow_unsafe_jscode=True,
     fit_columns_on_grid_load=True,
@@ -286,6 +431,9 @@ for i, col in zip(*diff.to_numpy().nonzero()):
     c = edit_cols[col]
     changes.append((int(edited_df[ROW_ID].iat[i]), c, current.iat[i, col]))
 
+# New values must come from the controlled vocabulary
+bad = [(rid, c, v) for rid, c, v in changes if c in vocab and v not in vocab[c]]
+
 st.divider()
 
 # ----------------------------
@@ -294,32 +442,47 @@ st.divider()
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
 
-if st.button("Save", type="primary", disabled=not GITHUB_TOKEN):
-    if not changes:
-        st.info("Nothing to save.")
-        st.stop()
-    with st.spinner("Saving..."):
-        try:
-            status, msg, new_full, new_sha = save_changes(changes, GITHUB_TOKEN, len(full_df))
-        except Exception as e:
-            status, msg, new_full, new_sha = -1, str(e), None, None
+s1, s2 = st.columns([1, 5])
+save_clicked = s1.button(
+    "Save",                      # keep the label fixed: a changing label resets the button
+    key="save_btn",
+    type="primary",
+    disabled=not GITHUB_TOKEN,
+    use_container_width=True,
+)
+if changes:
+    s2.info(f"{len(changes)} unsaved cell change(s) — highlighted in yellow.")
 
-    if status in (200, 201):
-        # Use the exact file we just committed as the new baseline (no re-download)
-        ss["full_df"] = new_full.reset_index(drop=True)
-        ss["sha"] = new_sha
-        ss["grid_version"] += 1
-        ss["flash"] = f"Saved {len(changes)} changed cell(s) to GitHub."
-        st.rerun()
-    elif status == 409:
-        st.error(f"Conflict: {msg}")
+if save_clicked:
+    if not changes:
+        st.info("Nothing to save. (If you were still typing in a cell, press Enter first.)")
+    elif bad:
+        st.error("Some values are not in the controlled vocabulary: "
+                 + ", ".join(f"row {rid + 1} / {c}: '{v}'" for rid, c, v in bad[:10]))
     else:
-        st.error(f"Save failed ({status}): {msg}")
+        with st.spinner("Saving..."):
+            try:
+                status, msg, new_full = save_changes(changes, GITHUB_TOKEN, len(full_df))
+            except Exception as e:
+                status, msg, new_full = -1, str(e), None
+
+        if status in (200, 201):
+            # Use the exact file we just committed as the new baseline (no re-download)
+            ss["full_df"] = new_full.reset_index(drop=True)
+            ss["grid_version"] += 1
+            ss["flash"] = f"Saved {len(changes)} changed cell(s) to GitHub."
+            st.rerun()
+        elif status == 409:
+            st.error(f"Conflict: {msg}")
+        else:
+            st.error(f"Save failed ({status}): {msg}")
 
 # ----------------------------
 # SUMMARY
 # ----------------------------
 st.subheader("Summary")
-c1, c2 = st.columns(2)
+c1, c2, c3 = st.columns(3)
 c1.metric("Total rows in file", len(full_df))
 c2.metric("Unsaved cell changes", len(changes))
+out_of_vocab = sum(int((~full_df[c].isin(v)).sum()) for c, v in vocab.items())
+c3.metric("Saved values outside vocabulary", out_of_vocab)
