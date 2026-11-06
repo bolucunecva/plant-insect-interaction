@@ -1,0 +1,41 @@
+{
+  "plant_part_used_by_interacting_stage_norm": [
+    "flower",
+    "fruit",
+    "leaf",
+    "root",
+    "seed",
+    "stem",
+    "whole_plant"
+  ],
+  "plant_insect_interaction_type_normalized": [
+    "animal_parasitism",
+    "bark_plant_interaction",
+    "breeding_reproduction",
+    "chemical_interaction",
+    "development",
+    "disease_transmission",
+    "dispersal",
+    "feeding",
+    "herbivory_tissue_damage",
+    "nesting",
+    "no_interaction_or_nonhost_reported",
+    "other_resource_feeding",
+    "overwintering_dormancy",
+    "oviposition",
+    "parasitism_unresolved",
+    "plant_resource_use",
+    "pollination",
+    "predation_indirect",
+    "reported_host_association",
+    "resource_collection",
+    "resting_perching",
+    "sheltering_refuge",
+    "unresolved",
+    "visitation_association"
+  ],
+  "direct_plant_interaction": [
+    "unclear",
+    "yes"
+  ]
+}
