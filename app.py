@@ -562,7 +562,7 @@ save_clicked = s1.button(
     use_container_width=True,
 )
 if changes:
-    s2.info(f"{len(changes)} unsaved cell change(s) — highlighted in yellow.")
+    s2.info(f"{len(changes)} unsaved cell change(s)")
 
 if save_clicked:
     if not changes:
