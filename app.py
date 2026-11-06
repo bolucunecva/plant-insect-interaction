@@ -770,7 +770,7 @@ save_clicked = s1.button(
 )
 if changes:
     extra = f" {len(new_terms)} of them use a value not in the vocabulary." if new_terms else ""
-    s2.info(f"{len(changes)} unsaved cell change(s) — highlighted in yellow.{extra}")
+    s2.info(f"{len(changes)} unsaved cell change(s) — {extra}")
 
 if save_clicked:
     if not changes:
