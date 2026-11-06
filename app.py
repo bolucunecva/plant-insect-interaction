@@ -272,11 +272,7 @@ if full_df.empty:
 st.title("Review Tool")
 
 top_l, top_r = st.columns([4, 1])
-with top_l:
-    st.caption(
-        f"{len(full_df)} records. Filter the '{REVIEWER_COL}' column (box under its header) "
-        "to see one reviewer's rows. Double-click a cell to edit; press Enter to finish."
-    )
+
 with top_r:
     if st.button("Reload from GitHub", use_container_width=True):
         try:
