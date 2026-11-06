@@ -344,6 +344,63 @@ EDITS = f"window.__reviewEdits_{ss['grid_version']}"
 
 gb = GridOptionsBuilder.from_dataframe(grid_df)
 
+# Dropdown in the filter row of the reviewer column: All / each reviewer / unassigned.
+# The choice is remembered in the browser, so it survives saves and reloads.
+reviewer_options = (
+    sorted({v.strip() for v in full_df[REVIEWER_COL] if str(v).strip()})
+    if REVIEWER_COL in full_df.columns else []
+)
+reviewer_dropdown_filter = JsCode(f"""
+class ReviewerDropdownFilter {{
+    init(params) {{
+        this.params = params;
+        var options = {json.dumps(reviewer_options)};
+        this.eGui = document.createElement('div');
+        this.eGui.style.cssText = 'display:flex;align-items:center;width:100%;height:100%;';
+        this.select = document.createElement('select');
+        this.select.style.cssText = 'width:100%;height:26px;font-size:12px;';
+        var items = [['', 'All reviewers']]
+            .concat(options.map(function(o) {{ return [o, o]; }}))
+            .concat([['__blank__', '(unassigned)']]);
+        var self = this;
+        items.forEach(function(it) {{
+            var opt = document.createElement('option');
+            opt.value = it[0]; opt.textContent = it[1];
+            self.select.appendChild(opt);
+        }});
+        this.eGui.appendChild(this.select);
+        this.select.addEventListener('change', function() {{ self.apply(self.select.value, true); }});
+
+        var saved = '';
+        try {{ saved = window.localStorage.getItem('reviewTool.reviewer') || ''; }} catch (e) {{}}
+        if (saved && items.some(function(it) {{ return it[0] === saved; }})) {{
+            this.select.value = saved;
+            setTimeout(function() {{ self.apply(saved, false); }}, 0);
+        }}
+    }}
+    apply(value, remember) {{
+        if (remember) {{
+            try {{ window.localStorage.setItem('reviewTool.reviewer', value); }} catch (e) {{}}
+        }}
+        var model = null;
+        if (value === '__blank__') {{ model = {{filterType: 'text', type: 'blank'}}; }}
+        else if (value) {{ model = {{filterType: 'text', type: 'equals', filter: value}}; }}
+        var api = this.params.api;
+        this.params.parentFilterInstance(function(inst) {{
+            var r = inst.setModel(model);
+            if (r && typeof r.then === 'function') {{ r.then(function() {{ api.onFilterChanged(); }}); }}
+            else {{ api.onFilterChanged(); }}
+        }});
+    }}
+    onParentModelChanged(model) {{
+        if (!model) {{ this.select.value = ''; }}
+        else if (model.type === 'blank') {{ this.select.value = '__blank__'; }}
+        else if (model.filter != null) {{ this.select.value = model.filter; }}
+    }}
+    getGui() {{ return this.eGui; }}
+}}
+""")
+
 for col in data_cols:
     editable = col in edit_cols
     opts = dict(
@@ -379,7 +436,12 @@ for col in data_cols:
             headerTooltip="Controlled vocabulary: pick a value from the list",
         )
     if col == REVIEWER_COL:
-        opts.update(pinned="left", width=130)
+        opts.update(
+            pinned="left",
+            width=150,
+            floatingFilterComponent=reviewer_dropdown_filter,
+            suppressFloatingFilterButton=True,
+        )
     gb.configure_column(col, **opts)
 
 gb.configure_column(ROW_ID, hide=True)
