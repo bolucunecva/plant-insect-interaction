@@ -55,12 +55,10 @@ st.markdown(
 # ----------------------------
 GITHUB_REPO = "bolucunecva/plant-insect-interaction"
 GITHUB_BRANCH = os.getenv("GITHUB_BRANCH", "main")
-
-# One shared CSV for all reviewers
 GITHUB_FILE_PATH = os.getenv("GITHUB_FILE_PATH", "data/insect_plant_interactions_filtered.csv")
 
-REVIEWER_COL = "reviewer"          # column holding e.g. "Reviewer A" (hidden in the grid)
-VALID_REVIEWERS = ["A", "B", "C", "D"]
+REVIEWER_COL = "reviewer"          # shown in the grid; filter it to see one reviewer's rows
+REVIEWER_EDITABLE = False          # set True if reviewers may reassign rows
 ROW_ID = "__row_id"                # hidden: position of the row in the full CSV
 ORIG_PREFIX = "__orig_"            # hidden: saved values, for change highlighting
 
@@ -68,39 +66,7 @@ RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/{GIT
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
 BLOB_URL = f"https://api.github.com/repos/{GITHUB_REPO}/git/blobs"
 
-def _get_token():
-    tok = os.getenv("GITHUB_TOKEN")
-    if not tok:
-        try:
-            tok = st.secrets.get("GITHUB_TOKEN")
-        except Exception:
-            tok = None
-    return (tok or "").strip() or None   # strip stray spaces/newlines from copy-paste
-
-
-GITHUB_TOKEN = _get_token()
-
-
-class GitHubAuthError(Exception):
-    pass
-
-
-def _check(r):
-    if r.status_code in (401, 403):
-        raise GitHubAuthError(
-            f"GitHub rejected the token ({r.status_code}). It may be expired, revoked or mistyped, "
-            f"or lack access to {GITHUB_REPO}. Create a new token with Contents: Read and write "
-            f"on this repo and update GITHUB_TOKEN."
-        )
-    r.raise_for_status()
-
-
-def normalize_reviewer(value) -> str:
-    """'Reviewer A', 'reviewer a', 'A' -> 'A'. Empty/NaN -> ''."""
-    s = str(value or "").strip().upper()
-    if s.startswith("REVIEWER"):
-        s = s[len("REVIEWER"):].strip()
-    return s
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 
 
 # ----------------------------
@@ -126,16 +92,16 @@ def fetch_latest(token=None):
 
     headers = {"Authorization": f"token {token}"}
     r = requests.get(API_URL, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=60)
-    _check(r)
+    r.raise_for_status()
     sha = r.json()["sha"]
 
     b = requests.get(f"{BLOB_URL}/{sha}", headers=headers, timeout=120)
-    _check(b)
+    b.raise_for_status()
     text = base64.b64decode(b.json()["content"]).decode("utf-8")
     return _read_csv_text(text), sha
 
 
-def save_changes(changes, reviewer, token, expected_rows, max_retries=3):
+def save_changes(changes, token, expected_rows, max_retries=3):
     """
     Apply ONLY the changed cells to the latest version of the file and commit it.
     changes: list of (row_id, column, new_value).
@@ -149,10 +115,9 @@ def save_changes(changes, reviewer, token, expected_rows, max_retries=3):
         if len(latest) != expected_rows:
             return 409, "The file's row count changed since it was loaded. Click 'Reload from GitHub'.", None, None
 
-        row_ids = sorted({rid for rid, _, _ in changes})
-        owners = latest.iloc[row_ids][REVIEWER_COL].map(normalize_reviewer)
-        if (owners != reviewer).any():
-            return 409, "Some rows were reassigned since loading. Click 'Reload from GitHub'.", None, None
+        missing = {c for _, c, _ in changes} - set(latest.columns)
+        if missing:
+            return 409, f"Columns no longer in the file: {sorted(missing)}. Click 'Reload from GitHub'.", None, None
 
         for rid, col, val in changes:
             latest.iat[rid, latest.columns.get_loc(col)] = val
@@ -160,7 +125,7 @@ def save_changes(changes, reviewer, token, expected_rows, max_retries=3):
         buffer = StringIO()
         latest.to_csv(buffer, index=False)
         payload = {
-            "message": f"Update dataset (reviewer {reviewer}, {len(changes)} cells)",
+            "message": f"Update dataset ({len(changes)} cells)",
             "content": base64.b64encode(buffer.getvalue().encode("utf-8")).decode(),
             "branch": GITHUB_BRANCH,
             "sha": sha,
@@ -184,14 +149,8 @@ ss.setdefault("flash", None)
 
 
 def load_into_session():
-    try:
-        df, sha = fetch_latest(GITHUB_TOKEN)
-        ss["auth_error"] = None
-    except GitHubAuthError as e:
-        # Token is bad: still let people view/edit via the public raw file
-        df, sha = fetch_latest(None)
-        ss["auth_error"] = str(e)
-    ss["full_df"] = df
+    df, sha = fetch_latest(GITHUB_TOKEN)
+    ss["full_df"] = df.reset_index(drop=True)
     ss["sha"] = sha
     ss["grid_version"] += 1
 
@@ -206,50 +165,30 @@ if "full_df" not in ss:
 
 full_df = ss["full_df"]
 
-# ----------------------------
-# REVIEWER SELECTION
-# ----------------------------
-reviewer = st.query_params.get("reviewer", "A")
-if isinstance(reviewer, list):
-    reviewer = reviewer[0]
-reviewer = normalize_reviewer(reviewer)
-if reviewer not in VALID_REVIEWERS:
-    reviewer = "A"
-
-reviewer = st.sidebar.selectbox(
-    "Select Reviewer",
-    VALID_REVIEWERS,
-    index=VALID_REVIEWERS.index(reviewer),
-)
-st.sidebar.info(f"Reviewer: {reviewer}")
-
-if st.sidebar.button("Reload from GitHub"):
-    try:
-        load_into_session()
-        st.rerun()
-    except Exception as e:
-        st.sidebar.error(f"Reload failed: {e}")
-
-# ----------------------------
-# FILTER TO THIS REVIEWER
-# ----------------------------
-if full_df.empty or REVIEWER_COL not in full_df.columns:
-    st.error(f"CSV is empty or has no '{REVIEWER_COL}' column.")
+if full_df.empty:
+    st.error("CSV is empty.")
     st.stop()
-
-mask = full_df[REVIEWER_COL].map(normalize_reviewer) == reviewer
-df = full_df[mask].copy()
-df.insert(0, ROW_ID, df.index.astype(int))
-df = df.reset_index(drop=True)
-
-# Editable columns = everything except the hidden reviewer column
-edit_cols = [c for c in df.columns if c not in (ROW_ID, REVIEWER_COL)]
 
 # ----------------------------
 # TITLE
 # ----------------------------
 st.title("Review Tool")
-st.caption(f"Reviewer: {reviewer} — {len(df)} of {len(full_df)} records assigned")
+
+top_l, top_r = st.columns([4, 1])
+with top_l:
+    st.caption(
+        f"{len(full_df)} records. Use the filter box under the "
+        f"'{REVIEWER_COL}' header to show one reviewer's rows."
+        if REVIEWER_COL in full_df.columns
+        else f"{len(full_df)} records (no '{REVIEWER_COL}' column in the CSV)."
+    )
+with top_r:
+    if st.button("Reload from GitHub", use_container_width=True):
+        try:
+            load_into_session()
+            st.rerun()
+        except Exception as e:
+            st.error(f"Reload failed: {e}")
 
 if ss["flash"]:
     st.success(ss["flash"])
@@ -257,39 +196,51 @@ if ss["flash"]:
 
 st.subheader("Edit Dataset")
 
-if df.empty:
-    st.info(f"No records assigned to Reviewer {reviewer}.")
-    st.stop()
-
 # ----------------------------
 # GRID
 # ----------------------------
+df = full_df.copy()
+df.insert(0, ROW_ID, range(len(df)))
+
+# Put the reviewer column first so it is easy to filter
+data_cols = [c for c in df.columns if c != ROW_ID]
+if REVIEWER_COL in data_cols:
+    data_cols = [REVIEWER_COL] + [c for c in data_cols if c != REVIEWER_COL]
+
+edit_cols = [c for c in data_cols if REVIEWER_EDITABLE or c != REVIEWER_COL]
+
 # Baseline = last saved values (from session copy of the file)
-grid_df = df[[ROW_ID] + edit_cols].copy()
+grid_df = df[[ROW_ID] + data_cols].copy()
 for col in edit_cols:
     grid_df[f"{ORIG_PREFIX}{col}"] = df[col]
 
 gb = GridOptionsBuilder.from_dataframe(grid_df)
 
-for col in edit_cols:
-    cell_style_js = JsCode(f"""
-        function(params) {{
-            var orig = params.data['{ORIG_PREFIX}{col}'];
-            if (orig !== undefined && String(params.value ?? '') !== String(orig)) {{
-                return {{backgroundColor: '#fff3cd', color: '#856404', fontWeight: 'bold'}};
+for col in data_cols:
+    editable = col in edit_cols
+    cell_style_js = None
+    if editable:
+        cell_style_js = JsCode(f"""
+            function(params) {{
+                var orig = params.data['{ORIG_PREFIX}{col}'];
+                if (orig !== undefined && String(params.value ?? '') !== String(orig)) {{
+                    return {{backgroundColor: '#fff3cd', color: '#856404', fontWeight: 'bold'}};
+                }}
+                return null;
             }}
-            return null;
-        }}
-    """)
-    gb.configure_column(
-        col,
-        editable=True,
+        """)
+    opts = dict(
+        editable=editable,
         filter="agTextColumnFilter",
         floatingFilter=True,
-        cellStyle=cell_style_js,
         resizable=True,
         sortable=True,
     )
+    if cell_style_js is not None:
+        opts["cellStyle"] = cell_style_js
+    if col == REVIEWER_COL:
+        opts.update(pinned="left", width=130)
+    gb.configure_column(col, **opts)
 
 gb.configure_column(ROW_ID, hide=True)
 for col in edit_cols:
@@ -307,14 +258,14 @@ grid_response = AgGrid(
     grid_df,
     gridOptions=gb.build(),
     update_mode=GridUpdateMode.VALUE_CHANGED,
-    data_return_mode=DataReturnMode.AS_INPUT,
+    data_return_mode=DataReturnMode.AS_INPUT,   # always all rows, even when filtered
     allow_unsafe_jscode=True,
     fit_columns_on_grid_load=True,
     use_container_width=True,
     height=500,
     theme="streamlit",
     # new key after each save/reload -> grid remounts with the saved data
-    key=f"grid_{reviewer}_{ss['grid_version']}",
+    key=f"grid_{ss['grid_version']}",
 )
 
 returned = grid_response["data"]
@@ -342,8 +293,6 @@ st.divider()
 # ----------------------------
 if not GITHUB_TOKEN:
     st.warning("Missing GITHUB_TOKEN — saving disabled")
-elif ss.get("auth_error"):
-    st.error(ss["auth_error"] + " Saving will fail until this is fixed.")
 
 if st.button("Save", type="primary", disabled=not GITHUB_TOKEN):
     if not changes:
@@ -351,13 +300,13 @@ if st.button("Save", type="primary", disabled=not GITHUB_TOKEN):
         st.stop()
     with st.spinner("Saving..."):
         try:
-            status, msg, new_full, new_sha = save_changes(changes, reviewer, GITHUB_TOKEN, len(full_df))
+            status, msg, new_full, new_sha = save_changes(changes, GITHUB_TOKEN, len(full_df))
         except Exception as e:
             status, msg, new_full, new_sha = -1, str(e), None, None
 
     if status in (200, 201):
         # Use the exact file we just committed as the new baseline (no re-download)
-        ss["full_df"] = new_full
+        ss["full_df"] = new_full.reset_index(drop=True)
         ss["sha"] = new_sha
         ss["grid_version"] += 1
         ss["flash"] = f"Saved {len(changes)} changed cell(s) to GitHub."
@@ -371,7 +320,6 @@ if st.button("Save", type="primary", disabled=not GITHUB_TOKEN):
 # SUMMARY
 # ----------------------------
 st.subheader("Summary")
-c1, c2, c3 = st.columns(3)
-c1.metric("Assigned rows", len(df))
+c1, c2 = st.columns(2)
+c1.metric("Total rows in file", len(full_df))
 c2.metric("Unsaved cell changes", len(changes))
-c3.metric("Total rows in file", len(full_df))
