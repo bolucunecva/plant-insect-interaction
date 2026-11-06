@@ -66,16 +66,14 @@ REVIEWER_COL = "reviewer"          # shown in the grid; filter it to see one rev
 REVIEWER_EDITABLE = False          # set True if reviewers may reassign rows
 ROW_ID = "__row_id"                # hidden: position of the row in the full CSV
 
-# Controlled vocabulary: columns that may only take values from a fixed list.
-# Fill the lists in here, OR put a JSON file at VOCAB_FILE_PATH in the repo, e.g.
-#   {"plant_part": ["leaf", "stem", "root"], "direct_interactions": [...], ...}
-# The JSON file wins over the lists below. An empty list means "use the distinct
-# values already in the column" (a quick start; replace with the real list).
-CONTROLLED_VOCAB = {
-    "plant_part": [],
-    "direct_interactions": [],
-    "plant_insect_interactions": [],
-}
+# Suggested vocabulary comes ONLY from the JSON file at VOCAB_FILE_PATH in the repo:
+#   {"column_name": ["term1", "term2", ...], ...}
+# Columns listed there get a picker with these terms as suggestions; reviewers can still
+# type a value that is not in the list (it is saved, and flagged in blue).
+# Columns whose cells hold several terms joined by MULTI_SEP get a checkbox list.
+# An empty list ([]) means "suggest the values already in that column".
+# No JSON file -> every column is plain free text.
+MULTI_SEP = "|"
 
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
 API_BASE = f"https://api.github.com/repos/{GITHUB_REPO}"
@@ -212,14 +210,17 @@ def _norm_name(name: str) -> str:
 
 
 def build_vocab(df: pd.DataFrame, token=None) -> dict:
-    """Map actual CSV column name -> sorted list of allowed values ('' always allowed)."""
-    configured = dict(CONTROLLED_VOCAB)
+    """Map CSV column -> {"values": suggested terms, "multi": several terms per cell?}."""
+    configured = {}
     try:
         text, _ = gh_read_text(VOCAB_FILE_PATH, token)
         if text:
-            configured.update(json.loads(text))
+            configured = json.loads(text)
     except Exception as e:
         st.warning(f"Could not read {VOCAB_FILE_PATH}: {e}")
+    if not isinstance(configured, dict):
+        st.warning(f"{VOCAB_FILE_PATH} should be a JSON object of column -> list of terms.")
+        configured = {}
 
     by_norm = {_norm_name(c): c for c in df.columns}
     vocab = {}
@@ -227,11 +228,22 @@ def build_vocab(df: pd.DataFrame, token=None) -> dict:
         col = by_norm.get(_norm_name(name))
         if col is None:
             continue
+        multi = df[col].str.contains(MULTI_SEP, regex=False).any()
         values = [str(v).strip() for v in (values or []) if str(v).strip()]
-        if not values:  # fall back to what is already in the data
-            values = sorted({v.strip() for v in df[col] if str(v).strip()})
-        vocab[col] = [""] + sorted(dict.fromkeys(values), key=str.lower)
+        if not values:  # fall back to the terms already in the data
+            cells = df[col].str.split(MULTI_SEP, regex=False).explode() if multi else df[col]
+            values = [v.strip() for v in cells if str(v).strip()]
+        values = sorted(dict.fromkeys(values), key=str.lower)
+        vocab[col] = {"values": values, "set": set(values), "multi": bool(multi)}
     return vocab
+
+
+def value_allowed(value: str, entry: dict) -> bool:
+    value = str(value or "").strip()
+    if not value:
+        return True
+    terms = value.split(MULTI_SEP) if entry["multi"] else [value]
+    return all(t.strip() in entry["set"] for t in terms)
 
 
 # ----------------------------
@@ -272,7 +284,11 @@ if full_df.empty:
 st.title("Review Tool")
 
 top_l, top_r = st.columns([4, 1])
-
+with top_l:
+    st.caption(
+        f"{len(full_df)} records. Pick a reviewer from the dropdown under the '{REVIEWER_COL}' "
+        "header to see their rows. Double-click a cell to edit; press Enter to finish."
+    )
 with top_r:
     if st.button("Reload from GitHub", use_container_width=True):
         try:
@@ -397,6 +413,174 @@ class ReviewerDropdownFilter {{
 }}
 """)
 
+# Popup checkbox list for columns that hold several terms joined by MULTI_SEP
+multi_term_editor = JsCode(f"""
+class MultiTermEditor {{
+    init(params) {{
+        var sep = {json.dumps(MULTI_SEP)};
+        this.params = params;
+        this.sep = sep;
+        this.allowedList = params.context.vocab[params.vocabKey] || [];
+        this.options = this.allowedList.slice();
+        var current = String(params.value ?? '').split(sep).map(function(t) {{ return t.trim(); }})
+                         .filter(function(t) {{ return t; }});
+        // keep terms outside the list visible so they can be unticked
+        var self = this;
+        current.forEach(function(t) {{ if (self.options.indexOf(t) === -1) {{ self.options.push(t); }} }});
+        this.eGui = document.createElement('div');
+        this.eGui.style.cssText = 'background:#fff;border:1px solid #bbb;border-radius:4px;padding:6px 8px;'
+            + 'box-shadow:0 4px 12px rgba(0,0,0,.15);font-size:12px;min-width:230px;';
+        var list = document.createElement('div');
+        list.style.cssText = 'max-height:260px;overflow-y:auto;';
+        this.boxes = [];
+        this.options.forEach(function(opt) {{
+            var label = document.createElement('label');
+            label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox'; cb.value = opt; cb.checked = current.indexOf(opt) !== -1;
+            var text = document.createElement('span');
+            text.textContent = opt;
+            if (self.allowedList.indexOf(opt) === -1) {{ text.style.color = '#0a58ca'; text.title = 'Not in the vocabulary'; }}
+            label.appendChild(cb); label.appendChild(text); list.appendChild(label);
+            self.boxes.push(cb);
+        }});
+        this.eGui.appendChild(list);
+        this.list = list;
+        var other = document.createElement('input');
+        other.type = 'text';
+        other.placeholder = 'Other term (not in list) + Enter';
+        other.style.cssText = 'width:100%;box-sizing:border-box;margin-top:6px;padding:3px;font-size:12px;';
+        other.addEventListener('keydown', function(e) {{
+            if (e.key !== 'Enter') {{ return; }}
+            e.preventDefault(); e.stopPropagation();
+            var t = other.value.trim().split(sep).join(' ').trim();
+            if (!t) {{ params.stopEditing(); return; }}     // empty + Enter = done
+            var found = self.boxes.filter(function(b) {{ return b.value === t; }})[0];
+            if (found) {{ found.checked = true; }}
+            else {{
+                var label = document.createElement('label');
+                label.style.cssText = 'display:flex;align-items:center;gap:6px;padding:2px 0;cursor:pointer;';
+                var cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.value = t; cb.checked = true;
+                var text = document.createElement('span');
+                text.textContent = t; text.style.color = '#0a58ca'; text.title = 'Not in the vocabulary';
+                label.appendChild(cb); label.appendChild(text); self.list.appendChild(label);
+                self.boxes.push(cb);
+            }}
+            other.value = '';
+        }});
+        this.eGui.appendChild(other);
+        var done = document.createElement('button');
+        done.textContent = 'Done';
+        done.style.cssText = 'margin-top:6px;width:100%;padding:3px;cursor:pointer;';
+        done.addEventListener('click', function() {{ params.stopEditing(); }});
+        this.eGui.appendChild(done);
+        this.eGui.addEventListener('keydown', function(e) {{
+            if (e.key === 'Enter') {{ e.preventDefault(); params.stopEditing(); }}
+            if (e.key === 'Escape') {{ params.stopEditing(true); }}
+        }});
+    }}
+    getGui() {{ return this.eGui; }}
+    afterGuiAttached() {{ if (this.boxes.length) {{ this.boxes[0].focus(); }} }}
+    getValue() {{
+        return this.boxes.filter(function(b) {{ return b.checked; }})
+                         .map(function(b) {{ return b.value; }}).join(this.sep);
+    }}
+    isPopup() {{ return true; }}
+}}
+""")
+
+# Type-to-search picker for long single-value lists (taxa, families)
+search_select_editor = JsCode("""
+class SearchSelectEditor {
+    init(params) {
+        var self = this;
+        this.params = params;
+        this.values = params.context.vocab[params.vocabKey] || [];
+        this.value = String(params.value ?? '');
+        this.active = 0;
+        this.eGui = document.createElement('div');
+        this.eGui.style.cssText = 'background:#fff;border:1px solid #bbb;border-radius:4px;padding:6px;'
+            + 'box-shadow:0 4px 12px rgba(0,0,0,.15);font-size:12px;width:300px;';
+        this.input = document.createElement('input');
+        this.input.type = 'text';
+        this.input.value = this.value;
+        this.input.placeholder = 'Type to search, or type a new value';
+        this.input.style.cssText = 'width:100%;box-sizing:border-box;padding:4px;font-size:12px;';
+        this.info = document.createElement('div');
+        this.info.style.cssText = 'color:#666;font-size:11px;margin:4px 0;';
+        this.list = document.createElement('div');
+        this.list.style.cssText = 'max-height:240px;overflow-y:auto;';
+        this.eGui.appendChild(this.input);
+        this.eGui.appendChild(this.info);
+        this.eGui.appendChild(this.list);
+        this.input.addEventListener('input', function() { self.active = 0; self.render(); });
+        this.input.addEventListener('keydown', function(e) {
+            if (e.key === 'ArrowDown') { e.preventDefault(); self.move(1); }
+            else if (e.key === 'ArrowUp') { e.preventDefault(); self.move(-1); }
+            else if (e.key === 'Enter') {
+                e.preventDefault(); e.stopPropagation();
+                self.choose(self.matches[self.active]);
+            }
+            else if (e.key === 'Escape') { params.stopEditing(true); }
+        });
+        this.render();
+    }
+    render() {
+        var self = this;
+        var q = this.input.value.trim().toLowerCase();
+        var starts = [], contains = [];
+        for (var i = 0; i < this.values.length; i++) {
+            var v = this.values[i], lv = v.toLowerCase();
+            if (!q || lv.indexOf(q) === 0) { starts.push(v); }
+            else if (lv.indexOf(q) !== -1) { contains.push(v); }
+        }
+        var all = starts.concat(contains);
+        var typed = this.input.value.trim();
+        var lt = typed.toLowerCase();
+        var exact = typed && this.values.some(function(v) { return v.toLowerCase() === lt; });
+        this.custom = (typed && !exact) ? typed : null;   // free text, offered first
+        this.matches = [''].concat(this.custom ? [this.custom] : [], all.slice(0, 100));
+        this.info.textContent = all.length + ' match(es)' + (all.length > 100 ? ' — showing first 100' : '')
+            + (this.custom ? (all.length ? ' · use ↑ to keep what you typed' : ' · Enter keeps what you typed') : '');
+        this.list.innerHTML = '';
+        this.items = [];
+        this.matches.forEach(function(v, idx) {
+            var item = document.createElement('div');
+            var isCustom = self.custom !== null && idx === 1;
+            item.textContent = v === '' ? '(empty)' : (isCustom ? 'Use "' + v + '" (not in list)' : v);
+            item.style.cssText = 'padding:3px 4px;cursor:pointer;'
+                + (v === '' ? 'color:#888;font-style:italic;' : '')
+                + (isCustom ? 'color:#0a58ca;font-style:italic;' : '');
+            item.addEventListener('mousedown', function(e) { e.preventDefault(); self.choose(v); });
+            self.list.appendChild(item);
+            self.items.push(item);
+        });
+        // Default choice for Enter: the first name from the list; your own text only if nothing matches
+        if (!q) { this.active = 0; }
+        else if (all.length) { this.active = this.custom ? 2 : 1; }
+        else { this.active = this.custom ? 1 : 0; }
+        this.highlight();
+    }
+    move(d) {
+        this.active = Math.min(this.matches.length - 1, Math.max(0, this.active + d));
+        this.highlight();
+    }
+    highlight() {
+        var self = this;
+        this.items.forEach(function(it, i) {
+            it.style.background = i === self.active ? '#e7f1ff' : '';
+            if (i === self.active) { it.scrollIntoView({block: 'nearest'}); }
+        });
+    }
+    choose(v) { this.value = v; this.params.stopEditing(); }
+    getGui() { return this.eGui; }
+    afterGuiAttached() { this.input.focus(); this.input.select(); }
+    getValue() { return this.value; }
+    isPopup() { return true; }
+}
+""")
+
 for col in data_cols:
     editable = col in edit_cols
     opts = dict(
@@ -407,14 +591,27 @@ for col in data_cols:
         sortable=True,
     )
     if editable:
-        allowed = json.dumps(vocab.get(col)) if col in vocab else "null"
-        # Yellow = changed but not saved; red = value outside the controlled vocabulary
+        entry = vocab.get(col)
+        sep = json.dumps(MULTI_SEP if entry and entry["multi"] else None)
+        # Yellow = changed but not saved (wins); blue italic = value not in the JSON vocabulary
         opts["cellStyle"] = JsCode(f"""
             function(params) {{
-                var allowed = {allowed};
+                var sep = {sep};
+                var allowed = null;
+                var list = params.context && params.context.vocab && params.context.vocab[{json.dumps(col)}];
+                if (list) {{
+                    window.__vocabSets = window.__vocabSets || {{}};
+                    allowed = window.__vocabSets[{json.dumps(col)}] ||
+                              (window.__vocabSets[{json.dumps(col)}] = new Set(list));
+                }}
                 var v = String(params.value ?? '');
-                if (allowed && allowed.indexOf(v) === -1) {{
-                    return {{backgroundColor: '#f8d7da', color: '#842029'}};
+                if (allowed && v.trim() !== '') {{
+                    var terms = sep ? v.split(sep) : [v];
+                    for (var i = 0; i < terms.length; i++) {{
+                        if (!allowed.has(terms[i].trim())) {{
+                            return {{backgroundColor: '#e7f1ff', color: '#0a58ca', fontStyle: 'italic'}};
+                        }}
+                    }}
                 }}
                 var store = {EDITS} || {{}};
                 var e = store[params.data['{ROW_ID}'] + '|{col}'];
@@ -424,13 +621,22 @@ for col in data_cols:
                 return null;
             }}
         """)
-    if col in vocab:
-        opts.update(
-            cellEditor="agSelectCellEditor",
-            cellEditorParams={"values": vocab[col]},
-            singleClickEdit=True,
-            headerTooltip="Controlled vocabulary: pick a value from the list",
-        )
+    if col in vocab and editable:
+        entry = vocab[col]
+        if entry["multi"]:
+            opts.update(
+                cellEditor=multi_term_editor,
+                cellEditorParams={"vocabKey": col},
+                cellEditorPopup=True,
+                headerTooltip="Tick one or more terms, or add your own",
+            )
+        else:
+            opts.update(
+                cellEditor=search_select_editor,
+                cellEditorParams={"vocabKey": col},
+                cellEditorPopup=True,
+                headerTooltip="Pick a suggested value, or type your own",
+            )
     if col == REVIEWER_COL:
         opts.update(
             pinned="left",
@@ -494,6 +700,7 @@ finish_edit_on_leave = JsCode("""
 """)
 
 gb.configure_grid_options(
+    context={"vocab": {c: e["values"] for c, e in vocab.items()}},
     suppressMovableColumns=False,
     domLayout="normal",
     stopEditingWhenCellsLoseFocus=True,   # commit a cell edit as soon as you click elsewhere
@@ -542,8 +749,8 @@ for e in edits:
     if val != full_df.iat[rid, full_df.columns.get_loc(col)]:   # reverted edits drop out
         changes.append((rid, col, val))
 
-# New values must come from the controlled vocabulary
-bad = [(rid, c, v) for rid, c, v in changes if c in vocab and v not in vocab[c]]
+# Values outside the vocabulary are allowed; just count them for information
+new_terms = [(rid, c, v) for rid, c, v in changes if c in vocab and not value_allowed(v, vocab[c])]
 
 st.divider()
 
@@ -562,14 +769,12 @@ save_clicked = s1.button(
     use_container_width=True,
 )
 if changes:
-    s2.info(f"{len(changes)} unsaved cell change(s)")
+    extra = f" {len(new_terms)} of them use a value not in the vocabulary." if new_terms else ""
+    s2.info(f"{len(changes)} unsaved cell change(s) — highlighted in yellow.{extra}")
 
 if save_clicked:
     if not changes:
         st.info("Nothing to save. (If you were still typing in a cell, press Enter first.)")
-    elif bad:
-        st.error("Some values are not in the controlled vocabulary: "
-                 + ", ".join(f"row {rid + 1} / {c}: '{v}'" for rid, c, v in bad[:10]))
     else:
         with st.spinner("Saving..."):
             try:
@@ -595,5 +800,6 @@ st.subheader("Summary")
 c1, c2, c3 = st.columns(3)
 c1.metric("Total rows in file", len(full_df))
 c2.metric("Unsaved cell changes", len(changes))
-out_of_vocab = sum(int((~full_df[c].isin(v)).sum()) for c, v in vocab.items())
-c3.metric("Saved values outside vocabulary", out_of_vocab)
+out_of_vocab = sum(int((~full_df[c].map(lambda x, e=e: value_allowed(x, e))).sum())
+                   for c, e in vocab.items())
+c3.metric("Saved values not in vocabulary", out_of_vocab)
