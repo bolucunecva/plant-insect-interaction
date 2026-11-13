@@ -62,9 +62,17 @@ GITHUB_FILE_PATH = os.getenv("GITHUB_FILE_PATH", "data/insect_plant_interactions
 NOTES_FILE_PATH = os.getenv("NOTES_FILE_PATH", "data/review_notes.csv")
 VOCAB_FILE_PATH = os.getenv("VOCAB_FILE_PATH", "data/controlled_vocabulary.json")
 
-REVIEWER_COL = "reviewer"          # shown in the grid; filter it to see one reviewer's rows
-REVIEWER_EDITABLE = False          # set True if reviewers may reassign rows
+REVIEWED_COL = "reviewed"          # checkbox column; matched case-insensitively, created if missing
+REVIEWED_YES = "yes"               # value saved when the box is ticked
+REVIEWED_NO = ""                   # value saved when the box is unticked
+AUTO_REVIEW_ON_EDIT = False        # True = editing any cell in a row ticks "reviewed" for that row
 ROW_ID = "__row_id"                # hidden: position of the row in the full CSV
+
+TRUTHY = {"yes", "y", "true", "1", "x", "✓", "reviewed"}
+
+
+def is_reviewed(value) -> bool:
+    return str(value or "").strip().lower() in TRUTHY
 
 # Suggested vocabulary comes ONLY from the JSON file at VOCAB_FILE_PATH in the repo:
 #   {"column_name": ["term1", "term2", ...], ...}
@@ -132,12 +140,39 @@ def _read_csv_text(text) -> pd.DataFrame:
     return pd.read_csv(StringIO(text), dtype=str, keep_default_na=False, low_memory=False)
 
 
+def reviewed_col_name(columns) -> str:
+    """The existing column that means 'reviewed' (any case/spacing), else REVIEWED_COL."""
+    for c in columns:
+        if _norm_name(c) == _norm_name(REVIEWED_COL):
+            return c
+    return REVIEWED_COL
+
+
+NOTES_COL_NAMES = {"reviewer_notes", "reviewer_note", "review_notes", "review_note"}
+
+
+def notes_col_name(columns):
+    """The reviewer-notes column (any case/spacing: 'Reviewer Notes', 'reviewer_notes'...), or None."""
+    for c in columns:
+        if _norm_name(c) in NOTES_COL_NAMES:
+            return c
+    return None
+
+
 def fetch_latest(token=None):
     text, sha = gh_read_text(GITHUB_FILE_PATH, token)
     if text is None:
         raise FileNotFoundError(GITHUB_FILE_PATH)
     df = _read_csv_text(text)
     df.attrs["line_end"] = _line_end(text)
+    rcol = reviewed_col_name(df.columns)
+    if rcol not in df.columns:           # first time: add an empty "reviewed" column
+        df[rcol] = REVIEWED_NO
+    # Keep the reviewer-notes column as the last column (in the grid and in the saved CSV)
+    ncol = notes_col_name(df.columns)
+    if ncol:
+        df = df[[c for c in df.columns if c != ncol] + [ncol]]
+        df.attrs["line_end"] = _line_end(text)
     return df, sha
 
 
@@ -226,7 +261,7 @@ def build_vocab(df: pd.DataFrame, token=None) -> dict:
     vocab = {}
     for name, values in configured.items():
         col = by_norm.get(_norm_name(name))
-        if col is None:
+        if col is None or col == reviewed_col_name(df.columns):   # checkbox column, no picker
             continue
         multi = df[col].str.contains(MULTI_SEP, regex=False).any()
         values = [str(v).strip() for v in (values or []) if str(v).strip()]
@@ -286,8 +321,9 @@ st.title("Review Tool")
 top_l, top_r = st.columns([4, 1])
 with top_l:
     st.caption(
-        f"{len(full_df)} records. Pick a reviewer from the dropdown under the '{REVIEWER_COL}' "
-        "header to see their rows. Double-click a cell to edit; press Enter to finish."
+        f"{len(full_df)} records. Double-click a cell to edit; press Enter to finish. "
+        "Tick the 'reviewed' box when a row is checked (saved as 'yes'). "
+        "Use the dropdown under that header to show only reviewed / not reviewed rows."
     )
 with top_r:
     if st.button("Reload from GitHub", use_container_width=True):
@@ -340,12 +376,14 @@ st.subheader("Edit Dataset")
 df = full_df.copy()
 df.insert(0, ROW_ID, range(len(df)))
 
-# Put the reviewer column first so it is easy to filter
-data_cols = [c for c in df.columns if c != ROW_ID]
-if REVIEWER_COL in data_cols:
-    data_cols = [REVIEWER_COL] + [c for c in data_cols if c != REVIEWER_COL]
+RCOL = reviewed_col_name(full_df.columns)
 
-edit_cols = [c for c in data_cols if REVIEWER_EDITABLE or c != REVIEWER_COL]
+# Put the reviewed column first so it is easy to tick and filter
+data_cols = [c for c in df.columns if c != ROW_ID]
+if RCOL in data_cols:
+    data_cols = [RCOL] + [c for c in data_cols if c != RCOL]
+
+edit_cols = list(data_cols)    # every column can change (reviewed via its checkbox)
 
 grid_df = df[[ROW_ID] + data_cols].copy()
 
@@ -356,61 +394,88 @@ EDITS = f"window.__reviewEdits_{ss['grid_version']}"
 
 gb = GridOptionsBuilder.from_dataframe(grid_df)
 
-# Dropdown in the filter row of the reviewer column: All / each reviewer / unassigned.
-# The choice is remembered in the browser, so it survives saves and reloads.
-reviewer_options = (
-    sorted({v.strip() for v in full_df[REVIEWER_COL] if str(v).strip()})
-    if REVIEWER_COL in full_df.columns else []
-)
-reviewer_dropdown_filter = JsCode(f"""
-class ReviewerDropdownFilter {{
+# Checkbox in the "reviewed" column. Ticking stores REVIEWED_YES, unticking REVIEWED_NO.
+# The change goes through the normal edit path, so it turns yellow and is saved with Save.
+reviewed_renderer = JsCode(f"""
+class ReviewedCheckboxRenderer {{
     init(params) {{
+        var self = this;
         this.params = params;
-        var options = {json.dumps(reviewer_options)};
+        this.truthy = {json.dumps(sorted(TRUTHY))};
+        this.eGui = document.createElement('div');
+        this.eGui.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;';
+        this.cb = document.createElement('input');
+        this.cb.type = 'checkbox';
+        this.cb.style.cssText = 'width:16px;height:16px;cursor:pointer;margin:0;';
+        this.cb.title = 'Tick when this row has been reviewed';
+        this.cb.checked = this.isYes(params.value);
+        ['mousedown', 'click', 'dblclick'].forEach(function(t) {{
+            self.cb.addEventListener(t, function(e) {{ e.stopPropagation(); }});
+        }});
+        this.cb.addEventListener('change', function() {{
+            self.params.node.setDataValue(self.params.colDef.field,
+                self.cb.checked ? {json.dumps(REVIEWED_YES)} : {json.dumps(REVIEWED_NO)});
+        }});
+        this.eGui.appendChild(this.cb);
+    }}
+    isYes(v) {{ return this.truthy.indexOf(String(v ?? '').trim().toLowerCase()) !== -1; }}
+    getGui() {{ return this.eGui; }}
+    refresh(params) {{ this.params = params; this.cb.checked = this.isYes(params.value); return true; }}
+}}
+""")
+
+# The filter sees "Reviewed" / "Not reviewed" instead of the raw cell text
+reviewed_filter_value = JsCode(f"""
+    function(params) {{
+        var v = String(params.data[params.colDef.field] ?? '').trim().toLowerCase();
+        return {json.dumps(sorted(TRUTHY))}.indexOf(v) !== -1 ? 'Reviewed' : 'Not reviewed';
+    }}
+""")
+
+# Dropdown in the filter row of the reviewed column: All / Reviewed / Not reviewed.
+# The choice is remembered in the browser, so it survives saves and reloads.
+reviewed_dropdown_filter = JsCode("""
+class ReviewedDropdownFilter {
+    init(params) {
+        this.params = params;
         this.eGui = document.createElement('div');
         this.eGui.style.cssText = 'display:flex;align-items:center;width:100%;height:100%;';
         this.select = document.createElement('select');
         this.select.style.cssText = 'width:100%;height:26px;font-size:12px;';
-        var items = [['', 'All reviewers']]
-            .concat(options.map(function(o) {{ return [o, o]; }}))
-            .concat([['__blank__', '(unassigned)']]);
+        var items = [['', 'All rows'], ['Reviewed', 'Reviewed'], ['Not reviewed', 'Not reviewed']];
         var self = this;
-        items.forEach(function(it) {{
+        items.forEach(function(it) {
             var opt = document.createElement('option');
             opt.value = it[0]; opt.textContent = it[1];
             self.select.appendChild(opt);
-        }});
+        });
         this.eGui.appendChild(this.select);
-        this.select.addEventListener('change', function() {{ self.apply(self.select.value, true); }});
+        this.select.addEventListener('change', function() { self.apply(self.select.value, true); });
 
         var saved = '';
-        try {{ saved = window.localStorage.getItem('reviewTool.reviewer') || ''; }} catch (e) {{}}
-        if (saved && items.some(function(it) {{ return it[0] === saved; }})) {{
+        try { saved = window.localStorage.getItem('reviewTool.reviewedFilter') || ''; } catch (e) {}
+        if (saved && items.some(function(it) { return it[0] === saved; })) {
             this.select.value = saved;
-            setTimeout(function() {{ self.apply(saved, false); }}, 0);
-        }}
-    }}
-    apply(value, remember) {{
-        if (remember) {{
-            try {{ window.localStorage.setItem('reviewTool.reviewer', value); }} catch (e) {{}}
-        }}
-        var model = null;
-        if (value === '__blank__') {{ model = {{filterType: 'text', type: 'blank'}}; }}
-        else if (value) {{ model = {{filterType: 'text', type: 'equals', filter: value}}; }}
+            setTimeout(function() { self.apply(saved, false); }, 0);
+        }
+    }
+    apply(value, remember) {
+        if (remember) {
+            try { window.localStorage.setItem('reviewTool.reviewedFilter', value); } catch (e) {}
+        }
+        var model = value ? {filterType: 'text', type: 'equals', filter: value} : null;
         var api = this.params.api;
-        this.params.parentFilterInstance(function(inst) {{
+        this.params.parentFilterInstance(function(inst) {
             var r = inst.setModel(model);
-            if (r && typeof r.then === 'function') {{ r.then(function() {{ api.onFilterChanged(); }}); }}
-            else {{ api.onFilterChanged(); }}
-        }});
-    }}
-    onParentModelChanged(model) {{
-        if (!model) {{ this.select.value = ''; }}
-        else if (model.type === 'blank') {{ this.select.value = '__blank__'; }}
-        else if (model.filter != null) {{ this.select.value = model.filter; }}
-    }}
-    getGui() {{ return this.eGui; }}
-}}
+            if (r && typeof r.then === 'function') { r.then(function() { api.onFilterChanged(); }); }
+            else { api.onFilterChanged(); }
+        });
+    }
+    onParentModelChanged(model) {
+        this.select.value = (model && model.filter) ? model.filter : '';
+    }
+    getGui() { return this.eGui; }
+}
 """)
 
 # Popup checkbox list for columns that hold several terms joined by MULTI_SEP
@@ -582,9 +647,10 @@ class SearchSelectEditor {
 """)
 
 for col in data_cols:
+    is_reviewed_col = col == RCOL
     editable = col in edit_cols
     opts = dict(
-        editable=editable,
+        editable=editable and not is_reviewed_col,   # reviewed changes via its checkbox
         filter="agTextColumnFilter",
         floatingFilter=True,
         resizable=True,
@@ -614,14 +680,14 @@ for col in data_cols:
                     }}
                 }}
                 var store = {EDITS} || {{}};
-                var e = store[params.data['{ROW_ID}'] + '|{col}'];
+                var e = store[params.data['{ROW_ID}'] + '|' + {json.dumps(col)}];
                 if (e && v !== e.orig) {{
                     return {{backgroundColor: '#fff3cd', color: '#856404', fontWeight: 'bold'}};
                 }}
                 return null;
             }}
         """)
-    if col in vocab and editable:
+    if col in vocab and editable and not is_reviewed_col:
         entry = vocab[col]
         if entry["multi"]:
             opts.update(
@@ -637,12 +703,15 @@ for col in data_cols:
                 cellEditorPopup=True,
                 headerTooltip="Pick a suggested value, or type your own",
             )
-    if col == REVIEWER_COL:
+    if is_reviewed_col:
         opts.update(
             pinned="left",
-            width=150,
-            floatingFilterComponent=reviewer_dropdown_filter,
+            width=130,
+            cellRenderer=reviewed_renderer,
+            filterValueGetter=reviewed_filter_value,
+            floatingFilterComponent=reviewed_dropdown_filter,
             suppressFloatingFilterButton=True,
+            headerTooltip="Tick when the row is reviewed (saved as 'yes')",
         )
     gb.configure_column(col, **opts)
 
@@ -661,6 +730,14 @@ record_edit = JsCode(f"""
             value: params.newValue == null ? '' : String(params.newValue),
             orig: prev ? prev.orig : (params.oldValue == null ? '' : String(params.oldValue))
         }};
+        // Optionally tick "reviewed" when another cell in the row is edited
+        var rcol = {json.dumps(RCOL)};
+        if ({json.dumps(AUTO_REVIEW_ON_EDIT)} && col !== rcol) {{
+            var cur = String(params.data[rcol] ?? '').trim().toLowerCase();
+            if ({json.dumps(sorted(TRUTHY))}.indexOf(cur) === -1) {{
+                params.node.setDataValue(rcol, {json.dumps(REVIEWED_YES)});
+            }}
+        }}
     }}
 """)
 
@@ -770,7 +847,7 @@ save_clicked = s1.button(
 )
 if changes:
     extra = f" {len(new_terms)} of them use a value not in the vocabulary." if new_terms else ""
-    s2.info(f"{len(changes)} unsaved cell change(s) — {extra}")
+    s2.info(f"{len(changes)} unsaved cell change(s).{extra}")
 
 if save_clicked:
     if not changes:
@@ -797,9 +874,11 @@ if save_clicked:
 # SUMMARY
 # ----------------------------
 st.subheader("Summary")
-c1, c2, c3 = st.columns(3)
+c1, c2, c3, c4 = st.columns(4)
 c1.metric("Total rows in file", len(full_df))
-c2.metric("Unsaved cell changes", len(changes))
+n_reviewed = int(full_df[RCOL].map(is_reviewed).sum()) if RCOL in full_df.columns else 0
+c2.metric("Rows reviewed (saved)", f"{n_reviewed} / {len(full_df)}")
+c4.metric("Unsaved cell changes", len(changes))
 out_of_vocab = sum(int((~full_df[c].map(lambda x, e=e: value_allowed(x, e))).sum())
                    for c, e in vocab.items())
 c3.metric("Saved values not in vocabulary", out_of_vocab)
