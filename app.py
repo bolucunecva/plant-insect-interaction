@@ -888,13 +888,10 @@ if save_clicked:
 # ----------------------------
 # GLOBAL REVIEW NOTES
 # ----------------------------
-notes_df = ss["notes"]
-with st.expander(f"Review notes ({len(notes_df)})", expanded=False):
-    if len(notes_df):
-        shown = notes_df.iloc[::-1].drop(columns=["timestamp_utc"], errors="ignore")   # newest first, no timestamp
-        st.dataframe(shown, hide_index=True, use_container_width=True)
-    else:
-        st.caption("No notes yet.")
+# Notes are saved to NOTES_FILE_PATH on GitHub but earlier notes are not shown here.
+with st.expander("Review notes", expanded=False):
+    st.caption("Add a general comment about the dataset or the review. Notes are saved for the "
+               "project team; earlier notes are not shown here.")
     with st.form("add_note", clear_on_submit=True):
         n1, n2 = st.columns([1, 4])
         author = n1.text_input("Your name / reviewer ID")
