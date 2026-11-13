@@ -383,37 +383,6 @@ to the shared CSV on GitHub.
 """
     )
 
-# ----------------------------
-# GLOBAL REVIEW NOTES
-# ----------------------------
-notes_df = ss["notes"]
-with st.expander(f"Review notes ({len(notes_df)})", expanded=False):
-    if len(notes_df):
-        st.dataframe(notes_df.iloc[::-1], hide_index=True, use_container_width=True)
-    else:
-        st.caption("No notes yet.")
-    with st.form("add_note", clear_on_submit=True):
-        n1, n2 = st.columns([1, 4])
-        author = n1.text_input("Your name / reviewer ID")
-        note = n2.text_area("Note", height=80,
-                            placeholder="General comments about the dataset or the review…")
-        submitted = st.form_submit_button("Add note", disabled=not GITHUB_TOKEN)
-    if submitted:
-        if not note.strip():
-            st.warning("Write a note first.")
-        else:
-            with st.spinner("Saving note..."):
-                try:
-                    ok, result = add_note(author, note, GITHUB_TOKEN)
-                except Exception as e:
-                    ok, result = False, str(e)
-            if ok:
-                ss["notes"] = result
-                ss["flash"] = "Note saved."
-                st.rerun()
-            else:
-                st.error(f"Could not save note: {result}")
-
 st.subheader("Edit Dataset")
 
 # ----------------------------
@@ -915,6 +884,38 @@ if save_clicked:
             st.error(f"Conflict: {msg}")
         else:
             st.error(f"Save failed ({status}): {msg}")
+
+# ----------------------------
+# GLOBAL REVIEW NOTES
+# ----------------------------
+notes_df = ss["notes"]
+with st.expander(f"Review notes ({len(notes_df)})", expanded=False):
+    if len(notes_df):
+        st.dataframe(notes_df.iloc[::-1], hide_index=True, use_container_width=True)
+    else:
+        st.caption("No notes yet.")
+    with st.form("add_note", clear_on_submit=True):
+        n1, n2 = st.columns([1, 4])
+        author = n1.text_input("Your name / reviewer ID")
+        note = n2.text_area("Note", height=80,
+                            placeholder="General comments about the dataset or the review…")
+        submitted = st.form_submit_button("Add note", disabled=not GITHUB_TOKEN)
+    if submitted:
+        if not note.strip():
+            st.warning("Write a note first.")
+        else:
+            with st.spinner("Saving note..."):
+                try:
+                    ok, result = add_note(author, note, GITHUB_TOKEN)
+                except Exception as e:
+                    ok, result = False, str(e)
+            if ok:
+                ss["notes"] = result
+                ss["flash"] = "Note saved."
+                st.rerun()
+            else:
+                st.error(f"Could not save note: {result}")
+
 
 # ----------------------------
 # SUMMARY
