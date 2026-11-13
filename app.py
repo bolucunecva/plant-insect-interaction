@@ -343,43 +343,27 @@ if ss["flash"]:
 with st.expander("How to use this tool (reviewer guide)", expanded=False):
     st.markdown(
         """
-**Your job:** check each row, fix wrong or missing values, add a comment in **Reviewer Notes**
-when something needs explaining, tick **reviewed**, and press **Save**. Saved changes go straight
-to the shared CSV on GitHub.
+## Insect–Plant Interaction Database: Review Instructions
 
-**1. Find your rows**
-- Under the **reviewed** header, pick *Not reviewed* to see only rows still to do
-  (*All rows* / *Reviewed* also available). Your browser remembers the choice.
-- Type in the box under any other header to filter by that column (e.g. a family or species name).
-- Click a header to sort. Filters and sorting never change the data.
+**Goal:** Check and improve the accuracy of insect–plant interaction records.
+### What to review
+For each record, check:
+1. **Direct plant interaction:** Does the insect directly use the listed plant (e.g., for feeding, oviposition, nesting or shelter)? Exclude indirect associations, such as predation on other insects living on the plant.
+2. **Plant organ:** Is the plant part involved correct (e.g., fruit, leaf, stem, root)?
+3. **Interaction type:** Is the interaction correctly classified (e.g., feeding, oviposition, nesting)?
 
-**2. Edit a cell**
-- **Double-click** a cell, change it, press **Enter** (Esc cancels). Clicking another cell also finishes the edit.
-- Columns with a suggested list open a **search box**: type, use ↑/↓, press Enter.
-  To keep exactly what you typed, choose the blue *Use "…" (not in list)* line. *(empty)* clears the cell.
-- Columns holding several terms (joined by `|`) open a **checkbox list**: tick/untick terms,
-  type a new one in *Other term* + Enter, then click **Done**.
+### Review rules
+- **Correct errors** where you know the right information.
+- **Resolve uncertain records:** Update fields marked *unresolved*, *unclear*, or *unknown* where possible.
+- **Use controlled vocabularies** where available, or enter your own classification if needed.
+- **Do not guess.** Leave uncertain information unchanged and add comments where clarification is needed.
+- **Mark reviewed rows:** Tick the **"review" column** for every row you have checked, even if no changes were needed.
 
-**3. Mark the row as reviewed**
-- Tick the **reviewed** checkbox (left column) when you have finished checking the row,
-  even if nothing needed changing. It is saved as `yes`. Untick it to undo.
-
-**4. Save**
-- Press **Save**. The counter next to it shows how many cells are changed but not saved.
-- Save often (e.g. every 10–20 rows). Unsaved changes are lost if you close or reload the page.
-- If you are still typing in a cell, press **Enter** first, then Save.
-
-**Cell colours**
-- **Yellow, bold** = changed, not saved yet.
-- **Blue, italic** = value not in the suggested vocabulary. Allowed, but check the spelling
-  and use a new term only when no listed term fits.
-
-**Other reviewers**
-- Several people can work at once: Save only writes the cells you changed.
-- Click **Reload from GitHub** to see others' latest changes. If Save reports a *Conflict*,
-  note your unsaved edits, click Reload, and redo them.
-- Use the **Review notes** panel for general comments about the dataset or the process,
-  and the **Reviewer Notes** column for comments about one row.
+### Before you finish
+1. Enter your **name/reviewer ID** and add general comments under *Review notes*. **At a minimum, specify which insect taxon or taxa you focused on** (e.g., species, genus, or family).
+2. Click **Add note** to record your comments.
+3. **IMPORTANT: Click the large red Save button** in the bottom-left corner to save your review.
+**Adding a note does not save dataset edits. Remember to Save!**
 """
     )
 
