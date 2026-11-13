@@ -891,7 +891,8 @@ if save_clicked:
 notes_df = ss["notes"]
 with st.expander(f"Review notes ({len(notes_df)})", expanded=False):
     if len(notes_df):
-        st.dataframe(notes_df.iloc[::-1], hide_index=True, use_container_width=True)
+        shown = notes_df.iloc[::-1].drop(columns=["timestamp_utc"], errors="ignore")   # newest first, no timestamp
+        st.dataframe(shown, hide_index=True, use_container_width=True)
     else:
         st.caption("No notes yet.")
     with st.form("add_note", clear_on_submit=True):
