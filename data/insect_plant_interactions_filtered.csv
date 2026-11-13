@@ -1,80 +1,80 @@
-accepted_insect_taxon,accepted_insect_family,accepted_plant_family,accepted_plant_taxon,plant_part_used_by_interacting_stage_norm,plant_insect_interaction_type_normalized,direct_plant_interaction,comments,reviewer
-Curculio elephas,Curculionidae,Fagaceae,Castanea sativa,fruit,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Hylobius abietis,Curculionidae,Pinaceae,Picea abies,stem,feeding,yes,,Reviewer A
-Hylobius abietis,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
-Hylastes cunicularius,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,Reviewer A
-Helicoverpa armigera,Noctuidae,Euphorbiaceae,Ricinus,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Pieris brassicae,Pieridae,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer A
-Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
-Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
-Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
-Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
-Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,leaf|stem,feeding,yes,,Reviewer A
-Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,,feeding,yes,,Reviewer A
-Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,,oviposition,yes,,Reviewer A
-Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,stem,feeding,yes,,Reviewer A
-Smicronyx fulvus,Curculionidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,Reviewer A
-Smicronyx fulvus,Curculionidae,Asteraceae,Helianthus annuus,,feeding,yes,,Reviewer A
-Dectes texanus,Cerambycidae,Asteraceae,Helianthus annuus,leaf|stem,feeding,yes,,Reviewer A
-Dectes texanus,Cerambycidae,Asteraceae,Helianthus annuus,stem,feeding,yes,,Reviewer A
-Homoeosoma nebulella,Pyralidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
-Homoeosoma nebulella,Pyralidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
-Melanagromyza minimoides,Agromyzidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
-Melanagromyza minimoides,Agromyzidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer A
-Helicoverpa armigera,Noctuidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,Reviewer A
-Helicoverpa armigera,Noctuidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,Reviewer B
-Lygus lineolaris,Miridae,Asteraceae,Helianthus annuus,seed,feeding,yes,,Reviewer B
-Thermobia domestica,Lepismatidae,Poaceae,Zea mays,flower,feeding,yes,,Reviewer B
-Thermobia domestica,Lepismatidae,Amaryllidaceae,Amaryllis,flower,feeding,yes,,Reviewer B
-Thermobia domestica,Lepismatidae,Ranunculaceae,Aquilegia vulgaris,flower,feeding,yes,,Reviewer B
-Thermobia domestica,Lepismatidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,Reviewer B
-Riptortus pedestris,Alydidae,Fabaceae,Glycine max,root,feeding,yes,,Reviewer B
-Bemisia tabaci,Aleyrodidae,Solanaceae,Solanum lycopersicum,leaf,feeding,yes,,Reviewer B
-Acyrthosiphon pisum,Aphididae,Fabaceae,Trifolium repens,stem,feeding,yes,,Reviewer B
-Sitobion miscanthi,Aphididae,Poaceae,Triticum aestivum,stem,feeding,yes,,Reviewer B
-Leptinotarsa decemlineata,Chrysomelidae,Solanaceae,Solanum tuberosum,leaf,feeding,yes,,Reviewer B
-Hypothenemus hampei,Curculionidae,Rubiaceae,Coffea arabica,fruit,feeding,yes,,Reviewer B
-Dendroctonus frontalis,Curculionidae,Pinaceae,Pinus,stem,feeding,yes,,Reviewer B
-Frankliniella occidentalis,Thripidae,Amaryllidaceae,Allium cepa,leaf,feeding,yes,,Reviewer B
-Thrips tabaci,Thripidae,Amaryllidaceae,Allium cepa,leaf,feeding,yes,,Reviewer B
-Phyllonorycter blancardella,Gracillariidae,Rosaceae,Malus domestica,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Spodoptera frugiperda,Noctuidae,Poaceae,Zea mays,leaf,feeding,yes,,Reviewer B
-Helicoverpa zea,Noctuidae,Poaceae,Zea mays,leaf,feeding,yes,,Reviewer B
-Tenthredinidae,Tenthredinidae,Poaceae,Triticum,leaf,feeding,yes,,Reviewer B
-Cynipidae,Cynipidae,Fagaceae,Quercus,leaf,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Ips typographus,Curculionidae,Pinaceae,Picea abies,stem,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Ips paraconfusus,Curculionidae,Pinaceae,Picea abies,stem,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Macrotermes,Termitidae,Poaceae,Zea mays,root|stem,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Apis mellifera,Apidae,Rosaceae,Fragaria x ananassa,flower,pollination,yes,,Reviewer B
-Bombus terrestris,Apidae,Rosaceae,Fragaria x ananassa,flower,pollination,yes,,Reviewer B
-Lucilia sericata,Calliphoridae,Rosaceae,Fragaria x ananassa,flower,pollination,yes,,Reviewer B
-Riptortus pedestris,Alydidae,Fabaceae,Glycine max,fruit|stem,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Riptortus pedestris,Alydidae,Poaceae,Hordeum vulgare,seed|stem,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Riptortus pedestris,Alydidae,Pedaliaceae,Sesamum indicum,seed|stem,feeding|herbivory_tissue_damage,yes,,Reviewer B
-Myzus persicae,Aphididae,Solanaceae,Nicotiana tabacum,leaf,disease_transmission,yes,,Reviewer B
-Rhopalosiphum maidis,Aphididae,Solanaceae,Nicotiana tabacum,leaf,disease_transmission,yes,,Reviewer B
-Aphis,Aphididae,Solanaceae,Nicotiana tabacum,leaf,disease_transmission,yes,,Reviewer C
-Drosicha corpulenta,Monophlebidae,Ebenaceae,Diospyros kaki,stem,feeding,yes,,Reviewer C
-Drosicha corpulenta,Monophlebidae,Rosaceae,Pyrus,stem,feeding,yes,,Reviewer C
-Bombyx mori,Bombycidae,Moraceae,Morus alba,leaf,feeding,yes,,Reviewer C
-Bombyx mori,Bombycidae,Rosaceae,Prunus speciosa,leaf,unresolved,unclear,,Reviewer C
-Bombyx mori,Bombycidae,Brassicaceae,Brassica oleracea,leaf,unresolved,unclear,,Reviewer C
-Bombyx mori,Bombycidae,Saururaceae,Houttuynia cordata,leaf,unresolved,unclear,,Reviewer C
-Bombyx mori,Bombycidae,Fagaceae,Quercus acutissima,leaf,unresolved,unclear,,Reviewer C
-Bombyx mori,Bombycidae,Simaroubaceae,Ailanthus altissima,leaf,unresolved,unclear,,Reviewer C
-Bombyx mori,Bombycidae,Altingiaceae,Liquidambar formosana,leaf,unresolved,unclear,,Reviewer C
-Mesoplatys ochroptera,Chrysomelidae,Fabaceae,Sesbania sesban,leaf,feeding,yes,,Reviewer C
-Rhyzopertha dominica,Bostrichidae,Poaceae,Triticum aestivum,seed,unresolved,unclear,,Reviewer C
-Leucinodes orbonalis,Crambidae,Solanaceae,Solanum melongena,leaf,unresolved,unclear,,Reviewer C
-Schizaphis graminum,Aphididae,Poaceae,Triticum aestivum,leaf,unresolved,unclear,,Reviewer C
-Diuraphis noxia,Aphididae,Poaceae,Triticum aestivum,leaf,unresolved,unclear,,Reviewer C
-Aphis gossypii,Aphididae,Malvaceae,Gossypium hirsutum,leaf,unresolved,unclear,,Reviewer C
-Aphomia cephalonica,Pyralidae,Poaceae,Oryza sativa,leaf,unresolved,unclear,,Reviewer C
-Helicoverpa armigera,Noctuidae,Malvaceae,Gossypium hirsutum,leaf,unresolved,unclear,,Reviewer C
-Bombyx mori,Bombycidae,Moraceae,Morus alba,leaf,unresolved,unclear,,Reviewer C
-Myzus persicae,Aphididae,Rosaceae,Prunus persica,leaf,unresolved,unclear,,Reviewer C
-Cassida rubiginosa,Chrysomelidae,Asteraceae,Cirsium arvense,leaf,unresolved,unclear,,Reviewer C
-Trichoplusia ni,Noctuidae,Brassicaceae,Arabidopsis thaliana,leaf,unresolved,unclear,,Reviewer C
+accepted_insect_taxon,accepted_insect_family,accepted_plant_family,accepted_plant_taxon,plant_part_used_by_interacting_stage_norm,plant_insect_interaction_type_normalized,direct_plant_interaction,comments,reviewed
+Curculio elephas,Curculionidae,Fagaceae,Castanea sativa,fruit,feeding|herbivory_tissue_damage,yes,,
+Hylobius abietis,Curculionidae,Pinaceae,Picea abies,stem,feeding,yes,,
+Hylobius abietis,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,
+Hylastes cunicularius,Curculionidae,Pinaceae,Picea abies,root,feeding,yes,,
+Helicoverpa armigera,Noctuidae,Euphorbiaceae,Ricinus,leaf,feeding|herbivory_tissue_damage,yes,,
+Pieris brassicae,Pieridae,Brassicaceae,Brassica oleracea,leaf,feeding|herbivory_tissue_damage,yes,,
+Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,
+Homoeosoma electella,Pyralidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,
+Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,
+Cochylichroa hospes,Tortricidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,
+Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,leaf|stem,feeding,yes,,
+Cylindrocopturus adspersus,Curculionidae,Asteraceae,Helianthus annuus,,feeding,yes,,
+Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,,oviposition,yes,,
+Contarinia schulzi,Cecidomyiidae,Asteraceae,Helianthus annuus,stem,feeding,yes,,
+Smicronyx fulvus,Curculionidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,
+Smicronyx fulvus,Curculionidae,Asteraceae,Helianthus annuus,,feeding,yes,,
+Dectes texanus,Cerambycidae,Asteraceae,Helianthus annuus,leaf|stem,feeding,yes,,
+Dectes texanus,Cerambycidae,Asteraceae,Helianthus annuus,stem,feeding,yes,,
+Homoeosoma nebulella,Pyralidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,
+Homoeosoma nebulella,Pyralidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,
+Melanagromyza minimoides,Agromyzidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,
+Melanagromyza minimoides,Agromyzidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,
+Helicoverpa armigera,Noctuidae,Asteraceae,Helianthus annuus,flower,oviposition,yes,,
+Helicoverpa armigera,Noctuidae,Asteraceae,Helianthus annuus,flower|seed,feeding,yes,,
+Lygus lineolaris,Miridae,Asteraceae,Helianthus annuus,seed,feeding,yes,,
+Thermobia domestica,Lepismatidae,Poaceae,Zea mays,flower,feeding,yes,,
+Thermobia domestica,Lepismatidae,Amaryllidaceae,Amaryllis,flower,feeding,yes,,
+Thermobia domestica,Lepismatidae,Ranunculaceae,Aquilegia vulgaris,flower,feeding,yes,,
+Thermobia domestica,Lepismatidae,Asteraceae,Helianthus annuus,flower,feeding,yes,,
+Riptortus pedestris,Alydidae,Fabaceae,Glycine max,root,feeding,yes,,
+Bemisia tabaci,Aleyrodidae,Solanaceae,Solanum lycopersicum,leaf,feeding,yes,,
+Acyrthosiphon pisum,Aphididae,Fabaceae,Trifolium repens,stem,feeding,yes,,
+Sitobion miscanthi,Aphididae,Poaceae,Triticum aestivum,stem,feeding,yes,,
+Leptinotarsa decemlineata,Chrysomelidae,Solanaceae,Solanum tuberosum,leaf,feeding,yes,,
+Hypothenemus hampei,Curculionidae,Rubiaceae,Coffea arabica,fruit,feeding,yes,,
+Dendroctonus frontalis,Curculionidae,Pinaceae,Pinus,stem,feeding,yes,,
+Frankliniella occidentalis,Thripidae,Amaryllidaceae,Allium cepa,leaf,feeding,yes,,
+Thrips tabaci,Thripidae,Amaryllidaceae,Allium cepa,leaf,feeding,yes,,
+Phyllonorycter blancardella,Gracillariidae,Rosaceae,Malus domestica,leaf,feeding|herbivory_tissue_damage,yes,,
+Spodoptera frugiperda,Noctuidae,Poaceae,Zea mays,leaf,feeding,yes,,
+Helicoverpa zea,Noctuidae,Poaceae,Zea mays,leaf,feeding,yes,,
+Tenthredinidae,Tenthredinidae,Poaceae,Triticum,leaf,feeding,yes,,
+Cynipidae,Cynipidae,Fagaceae,Quercus,leaf,feeding|herbivory_tissue_damage,yes,,
+Ips typographus,Curculionidae,Pinaceae,Picea abies,stem,feeding|herbivory_tissue_damage,yes,,
+Ips paraconfusus,Curculionidae,Pinaceae,Picea abies,stem,feeding|herbivory_tissue_damage,yes,,
+Macrotermes,Termitidae,Poaceae,Zea mays,root|stem,feeding|herbivory_tissue_damage,yes,,
+Apis mellifera,Apidae,Rosaceae,Fragaria x ananassa,flower,pollination,yes,,
+Bombus terrestris,Apidae,Rosaceae,Fragaria x ananassa,flower,pollination,yes,,
+Lucilia sericata,Calliphoridae,Rosaceae,Fragaria x ananassa,flower,pollination,yes,,
+Riptortus pedestris,Alydidae,Fabaceae,Glycine max,fruit|stem,feeding|herbivory_tissue_damage,yes,,
+Riptortus pedestris,Alydidae,Poaceae,Hordeum vulgare,seed|stem,feeding|herbivory_tissue_damage,yes,,
+Riptortus pedestris,Alydidae,Pedaliaceae,Sesamum indicum,seed|stem,feeding|herbivory_tissue_damage,yes,,
+Myzus persicae,Aphididae,Solanaceae,Nicotiana tabacum,leaf,disease_transmission,yes,,
+Rhopalosiphum maidis,Aphididae,Solanaceae,Nicotiana tabacum,leaf,disease_transmission,yes,,
+Aphis,Aphididae,Solanaceae,Nicotiana tabacum,leaf,disease_transmission,yes,,
+Drosicha corpulenta,Monophlebidae,Ebenaceae,Diospyros kaki,stem,feeding,yes,,
+Drosicha corpulenta,Monophlebidae,Rosaceae,Pyrus,stem,feeding,yes,,
+Bombyx mori,Bombycidae,Moraceae,Morus alba,leaf,feeding,yes,,
+Bombyx mori,Bombycidae,Rosaceae,Prunus speciosa,leaf,unresolved,unclear,,
+Bombyx mori,Bombycidae,Brassicaceae,Brassica oleracea,leaf,unresolved,unclear,,
+Bombyx mori,Bombycidae,Saururaceae,Houttuynia cordata,leaf,unresolved,unclear,,
+Bombyx mori,Bombycidae,Fagaceae,Quercus acutissima,leaf,unresolved,unclear,,
+Bombyx mori,Bombycidae,Simaroubaceae,Ailanthus altissima,leaf,unresolved,unclear,,
+Bombyx mori,Bombycidae,Altingiaceae,Liquidambar formosana,leaf,unresolved,unclear,,
+Mesoplatys ochroptera,Chrysomelidae,Fabaceae,Sesbania sesban,leaf,feeding,yes,,
+Rhyzopertha dominica,Bostrichidae,Poaceae,Triticum aestivum,seed,unresolved,unclear,,
+Leucinodes orbonalis,Crambidae,Solanaceae,Solanum melongena,leaf,unresolved,unclear,,
+Schizaphis graminum,Aphididae,Poaceae,Triticum aestivum,leaf,unresolved,unclear,,
+Diuraphis noxia,Aphididae,Poaceae,Triticum aestivum,leaf,unresolved,unclear,,
+Aphis gossypii,Aphididae,Malvaceae,Gossypium hirsutum,leaf,unresolved,unclear,,
+Aphomia cephalonica,Pyralidae,Poaceae,Oryza sativa,leaf,unresolved,unclear,,
+Helicoverpa armigera,Noctuidae,Malvaceae,Gossypium hirsutum,leaf,unresolved,unclear,,
+Bombyx mori,Bombycidae,Moraceae,Morus alba,leaf,unresolved,unclear,,
+Myzus persicae,Aphididae,Rosaceae,Prunus persica,leaf,unresolved,unclear,,
+Cassida rubiginosa,Chrysomelidae,Asteraceae,Cirsium arvense,leaf,unresolved,unclear,,
+Trichoplusia ni,Noctuidae,Brassicaceae,Arabidopsis thaliana,leaf,unresolved,unclear,,
 Bemisia tabaci,Aleyrodidae,Solanaceae,Solanum lycopersicum,leaf,unresolved,unclear,,
 Unaspis mabilis,Diaspididae,Meliaceae,Dysoxylum parasiticum,leaf,unresolved,unclear,,
 Spodoptera frugiperda,Noctuidae,Poaceae,Zea mays,leaf,unresolved,unclear,,
